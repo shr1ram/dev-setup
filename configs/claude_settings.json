@@ -1,16 +1,5 @@
 {
   "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/tmux-notify.sh"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "matcher": "*",
@@ -18,10 +7,6 @@
           {
             "type": "command",
             "command": "osascript -e \"display alert \\\"Task Completed\\\" message \\\"Claude Code has finished its task.\\\"\""
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/tmux-notify.sh"
           }
         ]
       }
@@ -33,21 +18,6 @@
           {
             "type": "command",
             "command": "osascript -e \"display alert \\\"User Input Required\\\" message \\\"Claude Code needs your permission to proceed.\\\"\""
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/tmux-notify.sh"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/ntfy-cooldown-clear.sh"
           }
         ]
       }

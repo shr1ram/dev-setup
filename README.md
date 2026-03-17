@@ -32,8 +32,8 @@ bash <(curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.s
 
 ### Full (`--full`)
 Everything in minimal, plus:
-- Installs Homebrew + packages (gh, git, tmux, pyenv, python, jq, curl)
-- Installs Tailscale, tap-to-tmux, nvm, pyenv, Claude Code
+- Installs Homebrew + packages (gh, git, tmux, pyenv, python)
+- Installs Tailscale, nvm, pyenv, Claude Code
 
 Existing files are backed up before overwriting. Running again is safe — it skips what's already installed and pulls the latest configs.
 
@@ -48,7 +48,6 @@ Existing files are backed up before overwriting. Running again is safe — it sk
 | `ssh`      | SSH config (hosts, keys)                        | private | minimal |
 | `brew`     | Installs Homebrew + packages from Brewfile      | public  | full    |
 | `shell`    | + pyenv, nvm install                            | public  | full    |
-| `tap`      | [tap-to-tmux](https://github.com/flavio87/tap-to-tmux) install | public  | full    |
 | `tailscale`| Tailscale VPN                                   | public  | full    |
 | `claude`   | + Claude Code install via npm                   | public  | full    |
 
@@ -59,7 +58,6 @@ Existing files are backed up before overwriting. Running again is safe — it sk
 ./setup.sh --skip-ssh          # Skip SSH config
 ./setup.sh --skip-claude       # Skip Claude Code setup
 ./setup.sh --skip-tmux         # Skip tmux
-./setup.sh --skip-tap          # Skip tap-to-tmux
 ./setup.sh --skip-tailscale    # Skip Tailscale
 ./setup.sh --skip-brew         # Skip Homebrew packages
 ./setup.sh --skip-shell        # Skip zsh config

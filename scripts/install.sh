@@ -13,7 +13,6 @@ set -euo pipefail
 #   --skip-ssh        Skip SSH setup (passed to private repo)
 #   --skip-claude     Skip Claude Code setup
 #   --skip-tmux       Skip tmux setup
-#   --skip-tap        Skip tap-to-tmux setup
 #   --skip-tailscale  Skip Tailscale setup
 #   --skip-brew       Skip Homebrew package installation
 #   --skip-shell      Skip shell (zsh) config setup
@@ -33,7 +32,6 @@ FULL=false
 SKIP_SSH=false
 SKIP_CLAUDE=false
 SKIP_TMUX=false
-SKIP_TAP=false
 SKIP_TAILSCALE=false
 SKIP_BREW=false
 SKIP_SHELL=false
@@ -68,7 +66,6 @@ while [[ $# -gt 0 ]]; do
         --skip-ssh)       SKIP_SSH=true ;;
         --skip-claude)    SKIP_CLAUDE=true ;;
         --skip-tmux)      SKIP_TMUX=true ;;
-        --skip-tap)       SKIP_TAP=true ;;
         --skip-tailscale) SKIP_TAILSCALE=true ;;
         --skip-brew)      SKIP_BREW=true ;;
         --skip-shell)     SKIP_SHELL=true ;;
@@ -88,14 +85,13 @@ done
 # If --only is set, skip everything except that module (implies --full)
 if [[ -n "$ONLY_MODULE" ]]; then
     FULL=true
-    SKIP_SSH=true; SKIP_CLAUDE=true; SKIP_TMUX=true; SKIP_TAP=true
+    SKIP_SSH=true; SKIP_CLAUDE=true; SKIP_TMUX=true
     SKIP_TAILSCALE=true; SKIP_BREW=true; SKIP_SHELL=true; SKIP_GIT=true
     SKIP_PRIVATE=true
     case "$ONLY_MODULE" in
         ssh)       SKIP_SSH=false; SKIP_PRIVATE=false ;;
         claude)    SKIP_CLAUDE=false ;;
         tmux)      SKIP_TMUX=false ;;
-        tap)       SKIP_TAP=false ;;
         tailscale) SKIP_TAILSCALE=false ;;
         brew)      SKIP_BREW=false ;;
         shell)     SKIP_SHELL=false ;;
@@ -278,36 +274,6 @@ setup_tmux() {
     fi
 }
 
-# ─── tap-to-tmux ─────────────────────────────────────────────────────────────
-setup_tap() {
-    if [[ "$FULL" != true ]] || [[ "$SKIP_TAP" == true ]]; then return; fi
-    info "Setting up tap-to-tmux..."
-
-    local TAP_DIR="$HOME/tap-to-tmux"
-
-    if [[ "$DRY_RUN" == true ]]; then
-        info "[DRY RUN] Would clone/update tap-to-tmux"
-    else
-        if [[ -d "$TAP_DIR/.git" ]]; then
-            info "Updating existing tap-to-tmux..."
-            git -C "$TAP_DIR" pull --ff-only
-        else
-            git clone https://github.com/flavio87/tap-to-tmux.git "$TAP_DIR"
-        fi
-    fi
-
-    if [[ "$DRY_RUN" == true ]]; then
-        info "[DRY RUN] Would run tap-to-tmux install.sh"
-    else
-        if [[ -f "$TAP_DIR/install.sh" ]]; then
-            bash "$TAP_DIR/install.sh"
-            ok "tap-to-tmux installed"
-        else
-            warn "tap-to-tmux install.sh not found"
-        fi
-    fi
-}
-
 # ─── Tailscale ───────────────────────────────────────────────────────────────
 setup_tailscale() {
     if [[ "$FULL" != true ]] || [[ "$SKIP_TAILSCALE" == true ]]; then return; fi
@@ -397,7 +363,6 @@ setup_private() {
     # Run private setup, passing through relevant flags
     local private_args=()
     [[ "$SKIP_SSH" == true ]] && private_args+=("--skip-ssh")
-    [[ "$SKIP_TAP" == true ]] && private_args+=("--skip-tap")
     [[ "$DRY_RUN" == true ]] && private_args+=("--dry-run")
 
     bash "$PRIVATE_CLONE_DIR/setup-private.sh" "${private_args[@]+"${private_args[@]}"}"
@@ -430,7 +395,6 @@ main() {
     setup_shell
     setup_ssh_key
     setup_tmux
-    setup_tap
     setup_tailscale
     setup_claude
     setup_private

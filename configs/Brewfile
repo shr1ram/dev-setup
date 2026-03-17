@@ -4,10 +4,6 @@ brew "git"
 brew "tmux"
 brew "pyenv"
 
-# tap-to-tmux dependencies
-brew "jq"
-brew "curl"
-
 # Networking
 cask "tailscale"
 
