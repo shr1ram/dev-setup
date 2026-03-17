@@ -370,7 +370,7 @@ setup_private() {
     [[ "$SKIP_TAP" == true ]] && private_args+=("--skip-tap")
     [[ "$DRY_RUN" == true ]] && private_args+=("--dry-run")
 
-    bash "$PRIVATE_CLONE_DIR/setup-private.sh" "${private_args[@]}"
+    bash "$PRIVATE_CLONE_DIR/setup-private.sh" "${private_args[@]+"${private_args[@]}"}"
 }
 
 # ─── Main ────────────────────────────────────────────────────────────────────
