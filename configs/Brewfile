@@ -1,0 +1,15 @@
+# Core dev tools
+brew "gh"
+brew "git"
+brew "tmux"
+brew "pyenv"
+
+# tap-to-tmux dependencies
+brew "jq"
+brew "curl"
+
+# Networking
+cask "tailscale"
+
+# Languages & runtimes
+brew "python@3.13"
