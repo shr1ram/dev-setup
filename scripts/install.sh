@@ -188,6 +188,7 @@ setup_shell() {
     if [[ "$SKIP_SHELL" == true ]]; then return; fi
     info "Setting up shell config..."
     install_config "$CLONE_DIR/configs/zshrc" "$HOME/.zshrc"
+    install_config "$CLONE_DIR/configs/bashrc" "$HOME/.bashrc"
 
     # Only install pyenv/nvm in full mode
     if [[ "$FULL" == true ]]; then

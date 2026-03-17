@@ -25,7 +25,7 @@ bash <(curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.s
 
 ### Minimal (default)
 1. Clones this repo to `~/dev-setup`
-2. Copies config files (gitconfig, zshrc, tmux.conf, Claude Code settings)
+2. Copies config files (gitconfig, zshrc, bashrc, tmux.conf, Claude Code settings)
 3. Generates SSH key if needed
 4. Installs TPM (tmux plugin manager) if tmux is available
 5. Authenticates with GitHub and clones the **private** repo for SSH config
@@ -42,7 +42,7 @@ Existing files are backed up before overwriting. Running again is safe — it sk
 | Module     | What it does                                    | Repo    | Mode    |
 |------------|-------------------------------------------------|---------|---------|
 | `git`      | Git config (name, email)                        | public  | minimal |
-| `shell`    | Zsh config                                      | public  | minimal |
+| `shell`    | Zsh + Bash config                                | public  | minimal |
 | `tmux`     | tmux config + TPM (if tmux available)            | public  | minimal |
 | `claude`   | Claude Code settings, hooks, permissions        | public  | minimal |
 | `ssh`      | SSH config (hosts, keys)                        | private | minimal |
@@ -60,7 +60,7 @@ Existing files are backed up before overwriting. Running again is safe — it sk
 ./setup.sh --skip-tmux         # Skip tmux
 ./setup.sh --skip-tailscale    # Skip Tailscale
 ./setup.sh --skip-brew         # Skip Homebrew packages
-./setup.sh --skip-shell        # Skip zsh config
+./setup.sh --skip-shell        # Skip zsh/bash config
 ./setup.sh --skip-git          # Skip git config
 ./setup.sh --skip-private      # Skip private repo entirely
 ./setup.sh --only tmux         # Only set up tmux
@@ -69,7 +69,7 @@ Existing files are backed up before overwriting. Running again is safe — it sk
 
 ## Updating Configs
 
-Configs in this repo are the source of truth. Don't edit live files (`~/.zshrc` etc.) directly — edit the source in `configs/`, commit, push, and re-run `setup.sh`.
+Configs in this repo are the source of truth. Don't edit live files (`~/.zshrc`, `~/.bashrc`, etc.) directly — edit the source in `configs/`, commit, push, and re-run `setup.sh`.
 
 ## Structure
 
@@ -83,6 +83,7 @@ dev-setup/
 │   ├── Brewfile              # Homebrew packages
 │   ├── gitconfig             # Git config
 │   ├── zshrc                 # Zsh config
+│   ├── bashrc                # Bash config
 │   ├── tmux.conf             # tmux config
 │   └── claude_settings.json  # Claude Code settings + permissions
 └── README.md
