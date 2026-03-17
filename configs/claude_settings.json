@@ -44,6 +44,10 @@
       "Read(./secrets/**)"
     ]
   },
+  "statusLine": {
+    "type": "command",
+    "command": "input=$(cat); branch=$(git -C \"$(echo \"$input\" | jq -r '.workspace.current_dir')\" --no-optional-locks rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'no repo'); remaining=$(echo \"$input\" | jq -r '.context_window.remaining_percentage // empty'); echo \"${branch}${remaining:+ | ${remaining}% ctx left}\""
+  },
   "alwaysThinkingEnabled": false,
   "effortLevel": "high"
 }
