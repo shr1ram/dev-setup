@@ -2,6 +2,8 @@
 
 Personal dev environment bootstrap. One command to set up a new machine.
 
+Supports **macOS** and **Linux**. Windows is not currently supported.
+
 ## Quick Install
 
 ```bash
@@ -62,7 +64,9 @@ Configs in this repo are the source of truth. Don't edit live files (`~/.zshrc` 
 
 ```
 dev-setup/
-├── setup.sh                  # Main bootstrap script
+├── setup.sh                  # Bootstrapper (clones repo, runs install.sh)
+├── scripts/
+│   └── install.sh            # Main installer (always runs from local copy)
 ├── CLAUDE.md                 # Instructions for Claude Code
 ├── configs/
 │   ├── Brewfile              # Homebrew packages
