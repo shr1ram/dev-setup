@@ -10,4 +10,4 @@ export PYENV_ROOT="$HOME/.pyenv"
 eval "$(pyenv init - bash)"
 
 # Aliases
-alias crc='tmux new-session -s claude$(($(tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -c "^claude") + 1)) "claude --remote-control"'
+alias crc='tmux new-session -s claude$(($(tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -c "^claude") + 1)) \; set destroy-unattached on \; send-keys "claude --remote-control" Enter'
