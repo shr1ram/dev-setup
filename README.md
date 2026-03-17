@@ -8,12 +8,21 @@ Personal dev environment bootstrap. One command to set up a new machine.
 bash <(curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh)
 ```
 
+Preview first with `--dry-run`:
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh) --dry-run
+```
+
 ## How It Works
 
-1. Clones this repo and installs public configs (tmux, zsh, git, Claude Code)
-2. Installs Homebrew packages, Tailscale, tap-to-tmux
-3. Authenticates with GitHub (`gh auth login`)
-4. Clones the **private** repo ([dev-setup-private](https://github.com/shr1ram/dev-setup-private)) and installs private configs (SSH, tap-to-tmux credentials, etc.)
+1. Clones this repo to `~/dev-setup`
+2. Installs Homebrew + packages (gh, git, tmux, pyenv, python, jq, curl)
+3. Copies public configs (gitconfig, zshrc, tmux.conf, Claude Code settings)
+4. Installs Tailscale, tap-to-tmux, TPM, nvm
+5. Authenticates with GitHub (`gh auth login`)
+6. Clones the **private** repo ([dev-setup-private](https://github.com/shr1ram/dev-setup-private)) and installs private configs (SSH, tap-to-tmux credentials)
+
+Existing files are backed up before overwriting. Running again is safe — it skips what's already installed and pulls the latest configs.
 
 ## What It Sets Up
 
@@ -43,4 +52,23 @@ bash <(curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.s
 ./setup.sh --skip-private      # Skip private repo entirely
 ./setup.sh --only tmux         # Only set up tmux
 ./setup.sh --dry-run           # Preview without making changes
+```
+
+## Updating Configs
+
+Configs in this repo are the source of truth. Don't edit live files (`~/.zshrc` etc.) directly — edit the source in `configs/`, commit, push, and re-run `setup.sh`.
+
+## Structure
+
+```
+dev-setup/
+├── setup.sh                  # Main bootstrap script
+├── CLAUDE.md                 # Instructions for Claude Code
+├── configs/
+│   ├── Brewfile              # Homebrew packages
+│   ├── gitconfig             # Git config
+│   ├── zshrc                 # Zsh config
+│   ├── tmux.conf             # tmux config
+│   └── claude_settings.json  # Claude Code settings + permissions
+└── README.md
 ```
