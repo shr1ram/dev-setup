@@ -5,7 +5,11 @@ set -euo pipefail
 # Dev Environment Setup (main installer)
 # This script is run from the local repo clone — never from a cached URL.
 #
+# By default, runs in MINIMAL mode: only copies config files (works on
+# servers/lab machines without sudo). Use --full to install packages too.
+#
 # Options:
+#   --full            Full setup: install packages + configs (needs sudo/brew)
 #   --skip-ssh        Skip SSH setup (passed to private repo)
 #   --skip-claude     Skip Claude Code setup
 #   --skip-tmux       Skip tmux setup
@@ -24,7 +28,8 @@ PRIVATE_REPO_URL="https://github.com/shr1ram/dev-setup-private.git"
 CLONE_DIR="$HOME/dev-setup"
 PRIVATE_CLONE_DIR="$HOME/dev-setup-private"
 
-# Defaults — all modules enabled
+# Defaults — minimal mode (configs only)
+FULL=false
 SKIP_SSH=false
 SKIP_CLAUDE=false
 SKIP_TMUX=false
@@ -59,6 +64,7 @@ usage() {
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --full)           FULL=true ;;
         --skip-ssh)       SKIP_SSH=true ;;
         --skip-claude)    SKIP_CLAUDE=true ;;
         --skip-tmux)      SKIP_TMUX=true ;;
@@ -79,8 +85,9 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-# If --only is set, skip everything except that module
+# If --only is set, skip everything except that module (implies --full)
 if [[ -n "$ONLY_MODULE" ]]; then
+    FULL=true
     SKIP_SSH=true; SKIP_CLAUDE=true; SKIP_TMUX=true; SKIP_TAP=true
     SKIP_TAILSCALE=true; SKIP_BREW=true; SKIP_SHELL=true; SKIP_GIT=true
     SKIP_PRIVATE=true
@@ -126,7 +133,7 @@ install_config() {
 
 # ─── Homebrew ────────────────────────────────────────────────────────────────
 setup_brew() {
-    if [[ "$SKIP_BREW" == true ]]; then return; fi
+    if [[ "$FULL" != true ]] || [[ "$SKIP_BREW" == true ]]; then return; fi
     info "Setting up Homebrew..."
 
     if ! command -v brew &>/dev/null; then
@@ -159,6 +166,11 @@ setup_git() {
 
 # ─── GitHub Auth ─────────────────────────────────────────────────────────────
 setup_gh_auth() {
+    if ! command -v gh &>/dev/null; then
+        warn "gh not installed. Skipping GitHub auth (run with --full to install)."
+        return 1
+    fi
+
     info "Checking GitHub authentication..."
 
     if gh auth status &>/dev/null; then
@@ -181,19 +193,22 @@ setup_shell() {
     info "Setting up shell config..."
     install_config "$CLONE_DIR/configs/zshrc" "$HOME/.zshrc"
 
-    if ! command -v pyenv &>/dev/null; then
-        if [[ "$DRY_RUN" == true ]]; then
-            info "[DRY RUN] Would install pyenv"
-        else
-            brew install pyenv 2>/dev/null || true
+    # Only install pyenv/nvm in full mode
+    if [[ "$FULL" == true ]]; then
+        if ! command -v pyenv &>/dev/null; then
+            if [[ "$DRY_RUN" == true ]]; then
+                info "[DRY RUN] Would install pyenv"
+            else
+                brew install pyenv 2>/dev/null || true
+            fi
         fi
-    fi
 
-    if [[ ! -d "$HOME/.nvm" ]]; then
-        if [[ "$DRY_RUN" == true ]]; then
-            info "[DRY RUN] Would install nvm"
-        else
-            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+        if [[ ! -d "$HOME/.nvm" ]]; then
+            if [[ "$DRY_RUN" == true ]]; then
+                info "[DRY RUN] Would install nvm"
+            else
+                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+            fi
         fi
     fi
 }
@@ -232,32 +247,40 @@ setup_tmux() {
     if [[ "$SKIP_TMUX" == true ]]; then return; fi
     info "Setting up tmux..."
 
-    if ! command -v tmux &>/dev/null; then
-        if [[ "$DRY_RUN" == true ]]; then
-            info "[DRY RUN] Would install tmux"
-        else
-            brew install tmux
+    # Only install tmux binary in full mode
+    if [[ "$FULL" == true ]]; then
+        if ! command -v tmux &>/dev/null; then
+            if [[ "$DRY_RUN" == true ]]; then
+                info "[DRY RUN] Would install tmux"
+            else
+                brew install tmux
+            fi
         fi
     fi
 
-    install_config "$CLONE_DIR/configs/tmux.conf" "$HOME/.tmux.conf"
+    # Always copy config if tmux is available
+    if command -v tmux &>/dev/null || [[ "$DRY_RUN" == true ]]; then
+        install_config "$CLONE_DIR/configs/tmux.conf" "$HOME/.tmux.conf"
 
-    # Install TPM
-    if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
-        if [[ "$DRY_RUN" == true ]]; then
-            info "[DRY RUN] Would install TPM"
+        # Install TPM
+        if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
+            if [[ "$DRY_RUN" == true ]]; then
+                info "[DRY RUN] Would install TPM"
+            else
+                git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
+                ok "TPM installed. Press prefix + I inside tmux to install plugins."
+            fi
         else
-            git clone https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
-            ok "TPM installed. Press prefix + I inside tmux to install plugins."
+            ok "TPM already installed"
         fi
     else
-        ok "TPM already installed"
+        warn "tmux not found. Skipping config (run with --full to install)."
     fi
 }
 
 # ─── tap-to-tmux ─────────────────────────────────────────────────────────────
 setup_tap() {
-    if [[ "$SKIP_TAP" == true ]]; then return; fi
+    if [[ "$FULL" != true ]] || [[ "$SKIP_TAP" == true ]]; then return; fi
     info "Setting up tap-to-tmux..."
 
     local TAP_DIR="$HOME/tap-to-tmux"
@@ -287,7 +310,7 @@ setup_tap() {
 
 # ─── Tailscale ───────────────────────────────────────────────────────────────
 setup_tailscale() {
-    if [[ "$SKIP_TAILSCALE" == true ]]; then return; fi
+    if [[ "$FULL" != true ]] || [[ "$SKIP_TAILSCALE" == true ]]; then return; fi
     info "Setting up Tailscale..."
 
     if [[ "$(uname)" == "Darwin" ]]; then
@@ -320,20 +343,24 @@ setup_claude() {
     if [[ "$SKIP_CLAUDE" == true ]]; then return; fi
     info "Setting up Claude Code..."
 
-    if ! command -v claude &>/dev/null; then
-        if [[ "$DRY_RUN" == true ]]; then
-            info "[DRY RUN] Would install Claude Code via npm"
-        else
-            if command -v npm &>/dev/null; then
-                npm install -g @anthropic-ai/claude-code
+    # Only install Claude binary in full mode
+    if [[ "$FULL" == true ]]; then
+        if ! command -v claude &>/dev/null; then
+            if [[ "$DRY_RUN" == true ]]; then
+                info "[DRY RUN] Would install Claude Code via npm"
             else
-                warn "npm not found. Install Node.js first, then: npm install -g @anthropic-ai/claude-code"
+                if command -v npm &>/dev/null; then
+                    npm install -g @anthropic-ai/claude-code
+                else
+                    warn "npm not found. Install Node.js first, then: npm install -g @anthropic-ai/claude-code"
+                fi
             fi
+        else
+            ok "Claude Code already installed"
         fi
-    else
-        ok "Claude Code already installed"
     fi
 
+    # Always copy settings
     mkdir -p "$HOME/.claude"
     install_config "$CLONE_DIR/configs/claude_settings.json" "$HOME/.claude/settings.json"
 }
@@ -345,7 +372,10 @@ setup_private() {
     prompt_header "Private Config Setup"
 
     # Ensure GitHub auth is set up first
-    setup_gh_auth
+    if ! setup_gh_auth; then
+        warn "Skipping private repo setup."
+        return
+    fi
 
     info "Cloning private config repo..."
     if [[ "$DRY_RUN" == true ]]; then
@@ -384,6 +414,12 @@ main() {
     if [[ "$DRY_RUN" == true ]]; then
         warn "DRY RUN mode — no changes will be made"
         echo ""
+    fi
+
+    if [[ "$FULL" == true ]]; then
+        info "Running FULL setup (configs + package installs)"
+    else
+        info "Running MINIMAL setup (configs only — use --full to install packages)"
     fi
 
     ok "Running from local repo at $CLONE_DIR"
