@@ -166,7 +166,7 @@ setup_brew() {
     if [[ "$DRY_RUN" == true ]]; then
         info "[DRY RUN] Would run: brew bundle --file=$CLONE_DIR/configs/Brewfile"
     else
-        brew bundle --file="$CLONE_DIR/configs/Brewfile" --no-lock
+        brew bundle --file="$CLONE_DIR/configs/Brewfile"
     fi
 }
 
