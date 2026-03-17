@@ -12,3 +12,6 @@ eval "$(pyenv init - zsh)"
 # Enable Zsh completion system
 autoload -Uz compinit
 compinit
+
+# Aliases
+alias crc='tmux new-session -s claude "claude --remote-control"'
