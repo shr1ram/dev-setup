@@ -5,8 +5,8 @@ set -euo pipefail
 # Dev Environment Setup (main installer)
 # This script is run from the local repo clone — never from a cached URL.
 #
-# By default, runs in MINIMAL mode: only copies config files (works on
-# servers/lab machines without sudo). Use --full to install packages too.
+# By default, runs in MINIMAL mode: copies configs and installs core tools
+# (gh, nvm, node, claude) without sudo. Use --full for brew/pyenv/tailscale.
 #
 # Options:
 #   --full            Full setup: install packages + configs (needs sudo/brew)
@@ -160,10 +160,56 @@ setup_git() {
     install_config "$CLONE_DIR/configs/gitconfig" "$HOME/.gitconfig"
 }
 
+# ─── GitHub CLI ──────────────────────────────────────────────────────────────
+setup_gh() {
+    if command -v gh &>/dev/null; then
+        ok "gh already installed ($(gh --version | head -1))"
+        return
+    fi
+
+    info "Installing GitHub CLI..."
+
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would install gh to ~/.local/bin"
+        return
+    fi
+
+    local gh_version="2.67.0"
+    local arch
+    arch="$(uname -m)"
+    local os
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+    # Map architecture names
+    case "$arch" in
+        x86_64)  arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        *) warn "Unsupported architecture: $arch. Skipping gh install."; return ;;
+    esac
+
+    # macOS uses brew in full mode; this standalone install is for linux/minimal
+    local tarball="gh_${gh_version}_${os}_${arch}.tar.gz"
+    local url="https://github.com/cli/cli/releases/download/v${gh_version}/${tarball}"
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+
+    if curl -sL "$url" | tar xz -C "$tmp_dir" 2>/dev/null; then
+        mkdir -p "$HOME/.local/bin"
+        cp "$tmp_dir"/gh_*/bin/gh "$HOME/.local/bin/gh"
+        chmod +x "$HOME/.local/bin/gh"
+        export PATH="$HOME/.local/bin:$PATH"
+        ok "Installed gh to ~/.local/bin/gh"
+    else
+        warn "Failed to download gh. Skipping."
+    fi
+
+    rm -rf "$tmp_dir"
+}
+
 # ─── GitHub Auth ─────────────────────────────────────────────────────────────
 setup_gh_auth() {
     if ! command -v gh &>/dev/null; then
-        warn "gh not installed. Skipping GitHub auth (run with --full to install)."
+        warn "gh not available. Skipping GitHub auth."
         return 1
     fi
 
@@ -190,7 +236,7 @@ setup_shell() {
     install_config "$CLONE_DIR/configs/zshrc" "$HOME/.zshrc"
     install_config "$CLONE_DIR/configs/bashrc" "$HOME/.bashrc"
 
-    # Only install pyenv/nvm in full mode
+    # pyenv requires brew — full mode only
     if [[ "$FULL" == true ]]; then
         if ! command -v pyenv &>/dev/null; then
             if [[ "$DRY_RUN" == true ]]; then
@@ -199,13 +245,30 @@ setup_shell() {
                 brew install pyenv 2>/dev/null || true
             fi
         fi
+    fi
 
-        if [[ ! -d "$HOME/.nvm" ]]; then
-            if [[ "$DRY_RUN" == true ]]; then
-                info "[DRY RUN] Would install nvm"
-            else
-                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-            fi
+    # nvm is a curl install — no sudo needed, runs in minimal mode
+    if [[ ! -d "$HOME/.nvm" ]]; then
+        if [[ "$DRY_RUN" == true ]]; then
+            info "[DRY RUN] Would install nvm"
+        else
+            info "Installing nvm..."
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        fi
+    else
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    fi
+
+    # Ensure node/npm are available (needed for Claude Code)
+    if command -v nvm &>/dev/null && ! command -v node &>/dev/null; then
+        if [[ "$DRY_RUN" == true ]]; then
+            info "[DRY RUN] Would install Node.js LTS via nvm"
+        else
+            info "Installing Node.js LTS..."
+            nvm install --lts
         fi
     fi
 }
@@ -244,18 +307,24 @@ setup_tmux() {
     if [[ "$SKIP_TMUX" == true ]]; then return; fi
     info "Setting up tmux..."
 
-    # Only install tmux binary in full mode
-    if [[ "$FULL" == true ]]; then
-        if ! command -v tmux &>/dev/null; then
-            if [[ "$DRY_RUN" == true ]]; then
-                info "[DRY RUN] Would install tmux"
-            else
-                brew install tmux
-            fi
+    if ! command -v tmux &>/dev/null; then
+        if [[ "$DRY_RUN" == true ]]; then
+            info "[DRY RUN] Would install tmux"
+        elif command -v brew &>/dev/null; then
+            brew install tmux
+        elif command -v apt-get &>/dev/null; then
+            info "Installing tmux via apt..."
+            sudo apt-get install -y tmux 2>/dev/null || warn "Could not install tmux (may need sudo). Install manually: sudo apt-get install tmux"
+        elif command -v yum &>/dev/null; then
+            info "Installing tmux via yum..."
+            sudo yum install -y tmux 2>/dev/null || warn "Could not install tmux (may need sudo). Install manually: sudo yum install tmux"
+        else
+            warn "No package manager found to install tmux. Install it manually."
         fi
+    else
+        ok "tmux already installed"
     fi
 
-    # Always copy config if tmux is available
     if command -v tmux &>/dev/null || [[ "$DRY_RUN" == true ]]; then
         install_config "$CLONE_DIR/configs/tmux.conf" "$HOME/.tmux.conf"
 
@@ -310,21 +379,19 @@ setup_claude() {
     if [[ "$SKIP_CLAUDE" == true ]]; then return; fi
     info "Setting up Claude Code..."
 
-    # Only install Claude binary in full mode
-    if [[ "$FULL" == true ]]; then
-        if ! command -v claude &>/dev/null; then
-            if [[ "$DRY_RUN" == true ]]; then
-                info "[DRY RUN] Would install Claude Code via npm"
-            else
-                if command -v npm &>/dev/null; then
-                    npm install -g @anthropic-ai/claude-code
-                else
-                    warn "npm not found. Install Node.js first, then: npm install -g @anthropic-ai/claude-code"
-                fi
-            fi
+    if ! command -v claude &>/dev/null; then
+        if [[ "$DRY_RUN" == true ]]; then
+            info "[DRY RUN] Would install Claude Code via npm"
         else
-            ok "Claude Code already installed"
+            if command -v npm &>/dev/null; then
+                info "Installing Claude Code..."
+                npm install -g @anthropic-ai/claude-code
+            else
+                warn "npm not found. Install Node.js first, then: npm install -g @anthropic-ai/claude-code"
+            fi
         fi
+    else
+        ok "Claude Code already installed"
     fi
 
     # Always copy settings
@@ -385,7 +452,7 @@ main() {
     if [[ "$FULL" == true ]]; then
         info "Running FULL setup (configs + package installs)"
     else
-        info "Running MINIMAL setup (configs only — use --full to install packages)"
+        info "Running MINIMAL setup (configs + core tools — use --full for brew/pyenv/tailscale)"
     fi
 
     ok "Running from local repo at $CLONE_DIR"
@@ -398,6 +465,7 @@ main() {
     setup_tmux
     setup_tailscale
     setup_claude
+    setup_gh
     setup_private
 
     echo ""
