@@ -3,7 +3,7 @@ if [ -z "$ZSH_VERSION" ] && [ -z "$BASH_VERSION" ]; then
     return 2>/dev/null || exit 0
 fi
 
-export PATH="$HOME/.local/bin:/Applications/MuJoCo:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 
 # nvm initialization
 if [ -d "$HOME/.nvm" ]; then

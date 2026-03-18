@@ -1,13 +1,23 @@
-export PATH="/Applications/MuJoCo:$PATH"
+# Guard: only source this in bash or zsh
+if [ -z "$BASH_VERSION" ] && [ -z "$ZSH_VERSION" ]; then
+    return 2>/dev/null || exit 0
+fi
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+export PATH="$HOME/.local/bin:$PATH"
+
+# nvm initialization
+if [ -d "$HOME/.nvm" ]; then
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+fi
 
 # pyenv initialization
-export PYENV_ROOT="$HOME/.pyenv"
-[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init - bash)"
+if command -v pyenv &>/dev/null; then
+    export PYENV_ROOT="$HOME/.pyenv"
+    [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init - bash)"
+fi
 
 # Aliases
 alias crc='tmux new-session -s claude$(($(tmux list-sessions -F "#{session_name}" 2>/dev/null | grep -c "^claude") + 1)) \; set destroy-unattached on \; send-keys "claude --remote-control" Enter'

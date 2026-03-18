@@ -2,6 +2,6 @@
 	name = Shriram
 	email = shriram00@hotmail.co.uk
 [credential "https://github.com"]
-	helper = !/opt/homebrew/bin/gh auth git-credential
+	helper = !gh auth git-credential
 [credential "https://gist.github.com"]
-	helper = !/opt/homebrew/bin/gh auth git-credential
+	helper = !gh auth git-credential

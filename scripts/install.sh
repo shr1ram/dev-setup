@@ -90,7 +90,7 @@ if [[ -n "$ONLY_MODULE" ]]; then
     SKIP_PRIVATE=true
     case "$ONLY_MODULE" in
         ssh)       SKIP_SSH=false; SKIP_PRIVATE=false ;;
-        claude)    SKIP_CLAUDE=false ;;
+        claude)    SKIP_CLAUDE=false; SKIP_SHELL=false ;;  # claude needs nvm/node from shell setup
         tmux)      SKIP_TMUX=false ;;
         tailscale) SKIP_TAILSCALE=false ;;
         brew)      SKIP_BREW=false ;;
@@ -103,20 +103,37 @@ fi
 
 backup_file() {
     local file="$1"
-    if [[ -f "$file" ]]; then
-        local backup="${file}.backup.$(date +%Y%m%d_%H%M%S)"
-        if [[ "$DRY_RUN" == true ]]; then
-            info "[DRY RUN] Would backup $file -> $backup"
-        else
-            cp "$file" "$backup"
-            warn "Backed up $file -> $backup"
-        fi
+    if [[ ! -f "$file" ]]; then return; fi
+
+    local backup="${file}.backup.$(date +%Y%m%d_%H%M%S)"
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would backup $file -> $backup"
+    else
+        cp "$file" "$backup"
+        warn "Backed up $file -> $backup"
+
+        # Keep only last 3 backups, remove older ones
+        local base="${file}.backup."
+        local count=0
+        for old in $(ls -1t "${base}"* 2>/dev/null); do
+            count=$((count + 1))
+            if [[ $count -gt 3 ]]; then
+                rm -f "$old"
+            fi
+        done
     fi
 }
 
 install_config() {
     local src="$1"
     local dest="$2"
+
+    # Skip if content is identical
+    if [[ -f "$dest" ]] && diff -q "$src" "$dest" &>/dev/null; then
+        ok "$dest already up to date"
+        return
+    fi
+
     backup_file "$dest"
     if [[ "$DRY_RUN" == true ]]; then
         info "[DRY RUN] Would copy $src -> $dest"
@@ -174,7 +191,7 @@ setup_gh() {
         return
     fi
 
-    local gh_version="2.67.0"
+    local gh_version="2.88.1"
     local arch
     arch="$(uname -m)"
     local os
@@ -253,7 +270,7 @@ setup_shell() {
             info "[DRY RUN] Would install nvm"
         else
             info "Installing nvm..."
-            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
         fi
@@ -464,8 +481,8 @@ main() {
     setup_ssh_key
     setup_tmux
     setup_tailscale
-    setup_claude
     setup_gh
+    setup_claude
     setup_private
 
     echo ""
