@@ -242,6 +242,12 @@ setup_gh_auth() {
         return
     fi
 
+    # Skip interactive login if stdin is not a terminal (e.g. curl | bash)
+    if [[ ! -t 0 ]]; then
+        warn "Non-interactive mode — skipping gh auth. Run 'gh auth login' manually."
+        return 1
+    fi
+
     info "GitHub authentication required for private repo access."
     gh auth login
 }
@@ -306,6 +312,12 @@ setup_ssh_key() {
 
     if [[ "$DRY_RUN" == true ]]; then
         info "[DRY RUN] Would generate SSH key"
+        return
+    fi
+
+    # Skip interactive prompt if stdin is not a terminal (e.g. curl | bash)
+    if [[ ! -t 0 ]]; then
+        info "Non-interactive mode — skipping SSH key generation. Run setup.sh again interactively to generate."
         return
     fi
 
