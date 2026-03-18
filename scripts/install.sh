@@ -246,12 +246,13 @@ setup_gh_auth() {
     gh auth login
 }
 
-# ─── Shell (Zsh) ─────────────────────────────────────────────────────────────
+# ─── Shell ───────────────────────────────────────────────────────────────────
 setup_shell() {
     if [[ "$SKIP_SHELL" == true ]]; then return; fi
     info "Setting up shell config..."
     install_config "$CLONE_DIR/configs/zshrc" "$HOME/.zshrc"
     install_config "$CLONE_DIR/configs/bashrc" "$HOME/.bashrc"
+    install_config "$CLONE_DIR/configs/cshrc" "$HOME/.cshrc"
 
     # pyenv requires brew — full mode only
     if [[ "$FULL" == true ]]; then

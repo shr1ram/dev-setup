@@ -1,0 +1,14 @@
+# tcsh/csh shell config
+
+setenv PATH "$HOME/.local/bin:$PATH"
+
+# nvm — not supported in tcsh, but ensure nvm-installed node is in PATH
+if ( -d "$HOME/.nvm/versions/node" ) then
+    set node_dir = `ls -1d $HOME/.nvm/versions/node/v* | tail -1`
+    if ( "$node_dir" != "" ) then
+        setenv PATH "${node_dir}/bin:$PATH"
+    endif
+endif
+
+# Aliases
+alias crc 'tmux new-session -s claude`date +%s` \; set destroy-unattached on \; send-keys "claude --remote-control" Enter'
