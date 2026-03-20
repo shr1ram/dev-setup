@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "osascript -e \"display alert \\\"Task Completed\\\" message \\\"Claude Code has finished its task.\\\"\""
+            "command": "[ \"$(uname)\" = \"Darwin\" ] && osascript -e \"display alert \\\"Task Completed\\\" message \\\"Claude Code has finished its task.\\\"\" || true"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "osascript -e \"display alert \\\"User Input Required\\\" message \\\"Claude Code needs your permission to proceed.\\\"\""
+            "command": "[ \"$(uname)\" = \"Darwin\" ] && osascript -e \"display alert \\\"User Input Required\\\" message \\\"Claude Code needs your permission to proceed.\\\"\" || true"
           }
         ]
       }
