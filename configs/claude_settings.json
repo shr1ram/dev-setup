@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ \"$(uname)\" = \"Darwin\" ] && osascript -e \"display alert \\\"Task Completed\\\" message \\\"Claude Code has finished its task.\\\"\" || true"
+            "command": "[ \"$CLAUDE_CODE_SUBPROCESS\" = \"1\" ] && exit 0; osascript -e \"display alert \\\"Task Completed\\\" message \\\"Claude Code has finished its task.\\\"\""
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ \"$(uname)\" = \"Darwin\" ] && osascript -e \"display alert \\\"User Input Required\\\" message \\\"Claude Code needs your permission to proceed.\\\"\" || true"
+            "command": "[ \"$CLAUDE_CODE_SUBPROCESS\" = \"1\" ] && exit 0; osascript -e \"display alert \\\"User Input Required\\\" message \\\"Claude Code needs your permission to proceed.\\\"\""
           }
         ]
       }
