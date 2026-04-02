@@ -2,6 +2,9 @@
 
 setenv PATH "$HOME/.local/bin:$PATH"
 
+# Claude Code: fullscreen / no-flicker mode (alternate screen buffer)
+setenv CLAUDE_CODE_NO_FLICKER 1
+
 # nvm — not supported in tcsh, but ensure nvm-installed node is in PATH
 if ( -d "$HOME/.nvm/versions/node" ) then
     set node_dir = `ls -1d $HOME/.nvm/versions/node/v* | tail -1`

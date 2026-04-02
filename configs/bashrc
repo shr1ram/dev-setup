@@ -5,6 +5,9 @@ fi
 
 export PATH="$HOME/.local/bin:$PATH"
 
+# Claude Code: fullscreen / no-flicker mode (alternate screen buffer)
+export CLAUDE_CODE_NO_FLICKER=1
+
 # nvm initialization
 if [ -d "$HOME/.nvm" ]; then
     export NVM_DIR="$HOME/.nvm"
