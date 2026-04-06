@@ -21,6 +21,7 @@ echo ""
 
 up_count=0
 down_count=0
+free_count=0
 
 # Temp dir for parallel results
 tmpdir=$(mktemp -d)
@@ -55,7 +56,21 @@ for host in $hosts; do
         gpu_util=$(echo "$gpu_util" | xargs)
         mem_used=$(echo "$mem_used" | xargs)
         mem_total=$(echo "$mem_total" | xargs)
-        printf "%-20s %-6s %-10s %-22s %s\n" "$name" "UP" "$gpu_util" "${mem_used} / ${mem_total}" "$gpu_name"
+        # Check if free: <10% util and <10% memory
+        util_num=${gpu_util%% *}
+        mem_used_num=${mem_used%% *}
+        mem_total_num=${mem_total%% *}
+        mem_pct=0
+        if [[ "$mem_total_num" -gt 0 ]] 2>/dev/null; then
+            mem_pct=$((mem_used_num * 100 / mem_total_num))
+        fi
+        if [[ "$util_num" -lt 10 && "$mem_pct" -lt 10 ]] 2>/dev/null; then
+            # Green highlight for free machines
+            printf "\033[1;32m%-20s %-6s %-10s %-22s %s  *** FREE ***\033[0m\n" "$name" "UP" "$gpu_util" "${mem_used} / ${mem_total}" "$gpu_name"
+            ((free_count++)) || true
+        else
+            printf "%-20s %-6s %-10s %-22s %s\n" "$name" "UP" "$gpu_util" "${mem_used} / ${mem_total}" "$gpu_name"
+        fi
         ((up_count++)) || true
     else
         printf "%-20s %-6s\n" "$name" "DOWN"
@@ -64,4 +79,4 @@ for host in $hosts; do
 done
 
 echo ""
-echo "Summary: ${up_count}/${total} up, ${down_count}/${total} down"
+echo "Summary: ${up_count}/${total} up, ${down_count}/${total} down, ${free_count} free"
