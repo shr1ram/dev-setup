@@ -15,3 +15,4 @@ endif
 
 # Aliases
 alias crc 'tmux new-session -s claude`date +%s` \; set destroy-unattached on \; send-keys "claude --remote-control" Enter'
+alias gpu-status '~/dev-setup/scripts/gpu-status.sh'
