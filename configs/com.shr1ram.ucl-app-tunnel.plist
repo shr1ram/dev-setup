@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- LaunchAgent: keep the UCL app tunnel (localhost:8000) alive + auto-reconnect.
+     __HOME__ is substituted with the real home dir by install.sh on deploy. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.shr1ram.ucl-app-tunnel</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__HOME__/dev-setup/scripts/ucl-app-tunnel.sh</string>
+    </array>
+
+    <!-- Start at login and keep it running: relaunch whenever ssh exits
+         (idle reap, network drop, wake-from-sleep). Throttle avoids a tight
+         respawn loop if the network is fully down. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/ucl-app-tunnel.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/ucl-app-tunnel.log</string>
+</dict>
+</plist>
