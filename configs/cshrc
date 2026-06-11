@@ -13,6 +13,20 @@ if ( -d "$HOME/.nvm/versions/node" ) then
     endif
 endif
 
+# UCL: redirect tool caches to the large project filesystem, not the small
+# 10GB home. Guarded so it's a no-op anywhere the project space doesn't exist
+# (e.g. the Mac). Existing caches were symlinked here too.
+if ( -d /cs/student/project_msc/2025/csml/sruppage ) then
+    set _proj = /cs/student/project_msc/2025/csml/sruppage
+    setenv XDG_CACHE_HOME "$_proj/.cache"
+    setenv HF_HOME        "$_proj/.cache/huggingface"
+    setenv UV_CACHE_DIR   "$_proj/.uv-cache"
+    setenv PIP_CACHE_DIR  "$_proj/.cache/pip"
+    setenv NPM_CONFIG_CACHE "$_proj/.npm-cache"
+    setenv WANDB_CACHE_DIR "$_proj/.cache/wandb"
+    unset _proj
+endif
+
 # Aliases
 alias crc 'tmux new-session -s claude`date +%s` \; set destroy-unattached on \; send-keys "claude --remote-control" Enter'
 alias gpu-status '~/dev-setup/scripts/gpu-status.sh'
