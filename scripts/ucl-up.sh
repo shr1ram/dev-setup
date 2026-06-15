@@ -119,6 +119,19 @@ if [ "$LLM_PROFILE" = "local" ]; then
   info "Starting Ollama wake-proxy on $APP (lazy start, 15min idle-kill) ..."
   ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'bash $PROJ/ucl-infra/start-ollama-proxy.sh'" || warn "ollama wake-proxy start reported an error"
 fi
+# --- recompose .env from the profile fragments BEFORE starting the app ---
+# .env is a build artifact, never a source of truth. start.sh copies whatever
+# .env is on disk into the runtime, so a .env left over from an older switch.sh
+# run (e.g. a base URL since corrected in env-profiles/*.env) would silently
+# ship stale config — exactly the :11434-vs-:11435 wake-proxy regression. We
+# always regenerate from the fragments so the running app matches the source.
+# --compose-only writes .env + .onemancompany/.env without needing the backend.
+INFRA_PROFILE=$(ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'grep -E ^INFRA= $REPO/env-profiles/current 2>/dev/null | cut -d= -f2'" 2>/dev/null | tr -d '[:space:]')
+INFRA_PROFILE="${INFRA_PROFILE:-ucl}"
+info "Recomposing .env on $APP (llm=$LLM_PROFILE infra=$INFRA_PROFILE) ..."
+ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'cd $REPO; ./switch.sh --compose-only llm=$LLM_PROFILE infra=$INFRA_PROFILE >/dev/null'" \
+  || warn "recompose reported an error — start.sh will use the existing .env"
+
 info "Starting app on $APP ..."
 APP_OUT=$(ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'export PATH=\$HOME/.local/bin:\$PATH XDG_CACHE_HOME=$PROJ/.cache UV_CACHE_DIR=$PROJ/.uv-cache; cd $REPO; bash start.sh start'" 2>&1) || true
 if printf '%s' "$APP_OUT" | grep -qiE 'Backend ready|already in use|already running'; then
