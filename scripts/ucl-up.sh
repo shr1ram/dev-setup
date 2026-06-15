@@ -111,10 +111,13 @@ ok "wrote $HOSTS_ENV"
 info "Starting infra shim on $INFRA ..."
 ssh "${SSH_OPTS[@]}" "$INFRA" "bash -lc 'INFRA_SHIM_HOST=127.0.0.1 bash $PROJ/ucl-infra/start-infra-shim.sh'" || warn "shim start reported an error (may already be up)"
 
-# --- start Ollama (local LLM only) + the app on the app box ---
+# --- start the Ollama wake-proxy (local LLM only) on the app box ---
+# We start the lazy wake-on-request PROXY, not Ollama itself: it cold-starts
+# Ollama on the first request and kills it after 15min idle to free the shared
+# GPU. The local profile's base URL points at the proxy (:11435).
 if [ "$LLM_PROFILE" = "local" ]; then
-  info "Starting Ollama on $APP ..."
-  ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'bash $PROJ/start-ollama.sh'" || warn "ollama start reported an error"
+  info "Starting Ollama wake-proxy on $APP (lazy start, 15min idle-kill) ..."
+  ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'bash $PROJ/ucl-infra/start-ollama-proxy.sh'" || warn "ollama wake-proxy start reported an error"
 fi
 info "Starting app on $APP ..."
 APP_OUT=$(ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'export PATH=\$HOME/.local/bin:\$PATH XDG_CACHE_HOME=$PROJ/.cache UV_CACHE_DIR=$PROJ/.uv-cache; cd $REPO; bash start.sh start'" 2>&1) || true
