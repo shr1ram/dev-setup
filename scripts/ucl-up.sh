@@ -18,7 +18,10 @@
 set -euo pipefail
 
 PROJ=/cs/student/project_msc/2025/csml/sruppage
-REPO="$PROJ/memento-research"
+# The active worktree to serve. The bare "memento-research" clone no longer
+# exists — work lives in git worktrees: "-dev" (feature branch, the one we
+# develop+test) and "-serve" (stable). Override with MEMENTO_REPO if needed.
+REPO="${MEMENTO_REPO:-$PROJ/memento-research-dev}"
 HOSTS_ENV="$HOME/dev-setup/ucl-hosts.env"
 SSH_CONFIG="$HOME/.ssh/config"
 SSH_OPTS=(-o RemoteCommand=none -o RequestTTY=no -o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=accept-new)
