@@ -135,8 +135,22 @@ info "Recomposing .env on $APP (llm=$LLM_PROFILE infra=$INFRA_PROFILE) ..."
 ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'cd $REPO; ./switch.sh --compose-only llm=$LLM_PROFILE infra=$INFRA_PROFILE >/dev/null'" \
   || warn "recompose reported an error — start.sh will use the existing .env"
 
+# --- which port does THIS worktree's app bind? ---
+# The two worktrees must run on DISTINCT ports so dev + serve can coexist (the
+# Mac tunnel forwards both): serve -> 8000, dev -> 8001. We can't read PORT from
+# .env because the recompose above regenerates .env from the shared profile
+# fragments (base.env pins PORT=8000), which would force every worktree onto
+# 8000. So derive the port from the worktree NAME and force it via start.sh's
+# PORT env override (resolve_port honours $PORT above everything else). This
+# also makes base.env's PORT irrelevant and survives any recompose.
+case "$REPO" in
+  *-dev|*-dev/) APP_PORT=8001 ;;
+  *)            APP_PORT=8000 ;;
+esac
+info "App port for $REPO = $APP_PORT"
+
 info "Starting app on $APP ..."
-APP_OUT=$(ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'export PATH=\$HOME/.local/bin:\$PATH XDG_CACHE_HOME=$PROJ/.cache UV_CACHE_DIR=$PROJ/.uv-cache; cd $REPO; bash start.sh start'" 2>&1) || true
+APP_OUT=$(ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'export PATH=\$HOME/.local/bin:\$PATH XDG_CACHE_HOME=$PROJ/.cache UV_CACHE_DIR=$PROJ/.uv-cache PORT=$APP_PORT; cd $REPO; bash start.sh start'" 2>&1) || true
 if printf '%s' "$APP_OUT" | grep -qiE 'Backend ready|already in use|already running'; then
   ok "app up on $APP"
 else
@@ -168,18 +182,18 @@ if [ -f "$PLIST" ]; then
 fi
 
 # --- verify app reachable, then point it at the shim (from the Mac via tunnel) ---
-info "Verifying localhost:8000 ..."
+info "Verifying localhost:$APP_PORT ..."
 REACHED=false
 for _ in $(seq 1 20); do
-  curl -fsS -m4 -o /dev/null "http://localhost:8000/" 2>/dev/null && { REACHED=true; break; }
+  curl -fsS -m4 -o /dev/null "http://localhost:$APP_PORT/" 2>/dev/null && { REACHED=true; break; }
   sleep 2
 done
 if ! $REACHED; then
-  warn "app not reachable yet via localhost:8000 — tunnel still settling; check launchctl + 'curl localhost:8000'"
+  warn "app not reachable yet via localhost:$APP_PORT — tunnel still settling; check launchctl + 'curl localhost:$APP_PORT'"
   exit 0
 fi
 info "Pointing app at shim: $INFRA_URL"
-curl -fsS -m10 -X POST "http://localhost:8000/api/env" -H "Content-Type: application/json" \
+curl -fsS -m10 -X POST "http://localhost:$APP_PORT/api/env" -H "Content-Type: application/json" \
   -d "{\"INFRA_SERVER_URL\":\"$INFRA_URL\",\"INFRA_SESSION_KEY\":\"$SHIM_KEY\"}" >/dev/null 2>&1 \
   && ok "infra wired ($INFRA_URL)" || warn "could not set INFRA_SERVER_URL — set it in the UI if Stage 6 fails"
-ok "app reachable at http://localhost:8000  (app=$APP infra=$INFRA)"
+ok "app reachable at http://localhost:$APP_PORT  (app=$APP infra=$INFRA)"
