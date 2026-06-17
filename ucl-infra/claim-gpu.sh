@@ -106,11 +106,34 @@ if [ "$reserve" = "CONFLICT" ] || [ -z "$reserve" ]; then
 fi
 read -r shim_port tunnel_port <<<"$reserve"
 
-# From here the reservation exists; any failure must release it (and tear down
-# whatever partially started) so the box/ports don't leak. release-gpu.sh is
-# idempotent and handles the placeholder lease. Cleared once we finalize.
+# From here the reservation exists; any failure must tear down whatever partially
+# started so the box/ports don't leak. We do this DIRECTLY from the local vars
+# (shim_port/tunnel_port/box_fqdn/chosen_local) rather than via release-gpu.sh —
+# release reads the lease record to find the ports/host, but the failure we most
+# need to handle is "the lease record vanished" (concurrent release/prune), where
+# release would no-op and leak the shim+tunnel (cubic). Cleared once we finalize.
 _reserved=1
-cleanup_reservation() { [ "${_reserved:-0}" = 1 ] && "$HERE/release-gpu.sh" "$RUN_ID" >/dev/null 2>&1 || true; }
+cleanup_reservation() {
+  [ "${_reserved:-0}" = 1 ] || return 0
+  # kill the loopback tunnel on tunnel_port (app box)
+  local tp; tp=$(lsof -tiTCP:"${tunnel_port:-0}" -sTCP:LISTEN 2>/dev/null | head -1 || true)
+  [ -n "$tp" ] && kill "$tp" 2>/dev/null || true
+  rm -f "$DIR/tunnel-${tunnel_port:-x}.log" 2>/dev/null || true
+  # stop the shim on the chosen box (by port) + remove its private root
+  local sc="for pid in \$(lsof -tiTCP:${shim_port:-0} -sTCP:LISTEN 2>/dev/null); do kill \$pid 2>/dev/null; done; rm -rf '$DIR/leases/$RUN_ID'; true"
+  if [ "${chosen_local:-true}" = true ]; then
+    bash -c "$sc" >/dev/null 2>&1 || true
+  else
+    printf '%s\n' "$sc" | ssh "${SSH_OPTS[@]}" "${box_fqdn:-}" bash >/dev/null 2>&1 || true
+  fi
+  # best-effort drop the lease entry (no-op if already gone)
+  with_leases_lock '
+import json, os, sys
+p = os.environ["LEASES_PATH"]; d = json.load(open(p)); d.pop(sys.argv[1], None)
+json.dump(d, open(p, "w"), indent=2)
+' "$RUN_ID" >/dev/null 2>&1 || true
+  blog "claim $RUN_ID: cleanup torn down shim/tunnel (port $shim_port/$tunnel_port)"
+}
 trap cleanup_reservation EXIT
 # Each lease gets its OWN shim ROOT (private session_key + workspace + runs.json),
 # so concurrent shims never collide on the shared ucl-infra/ files. server.py
