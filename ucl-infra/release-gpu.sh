@@ -20,10 +20,10 @@ if [ -z "$lease" ]; then
   exit 0
 fi
 
-read -r box box_fqdn shim_port tunnel_port is_local < <(echo "$lease" | python3 -c '
+read -r box box_fqdn shim_port tunnel_port is_local kind < <(echo "$lease" | python3 -c '
 import json,sys
 e=json.load(sys.stdin)
-print(e["box"], e["box_fqdn"], e["shim_port"], e["tunnel_port"], str(e["local"]).lower())
+print(e["box"], e["box_fqdn"], e["shim_port"], e["tunnel_port"], str(e["local"]).lower(), e.get("kind","exp"))
 ')
 
 # 1) Kill the loopback tunnel listening on tunnel_port (the ssh -L process).
@@ -36,8 +36,15 @@ if [ -n "$tpid" ]; then
 fi
 rm -f "$DIR/tunnel-$tunnel_port.log" 2>/dev/null || true
 
-# 2) Stop the shim on the GPU box (the server.py bound to shim_port).
-stop_cmd="for pid in \$(lsof -tiTCP:$shim_port -sTCP:LISTEN 2>/dev/null); do kill \$pid 2>/dev/null; done; pkill -f \"server.py\" 2>/dev/null; true"
+# 2) Stop the service on the GPU box bound to shim_port. For an experiment lease
+#    that's the server.py shim; for an LLM lease it's the Ollama wake-proxy (and
+#    its on-demand `ollama serve`). Match by port so we never kill another
+#    lease's service.
+if [ "$kind" = "llm" ]; then
+  stop_cmd="for pid in \$(lsof -tiTCP:$shim_port -sTCP:LISTEN 2>/dev/null); do kill \$pid 2>/dev/null; done; pkill -f \"ollama-wake-proxy.py\" 2>/dev/null; pkill -f \"ollama serve\" 2>/dev/null; true"
+else
+  stop_cmd="for pid in \$(lsof -tiTCP:$shim_port -sTCP:LISTEN 2>/dev/null); do kill \$pid 2>/dev/null; done; true"
+fi
 if [ "$is_local" = true ]; then
   bash -c "$stop_cmd" >/dev/null 2>&1 || true
 else
