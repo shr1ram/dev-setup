@@ -18,7 +18,6 @@ set -euo pipefail
 #   --skip-shell      Skip shell (zsh) config setup
 #   --skip-git        Skip git config setup
 #   --skip-private    Skip private repo setup entirely
-#   --skip-tunnel     Skip UCL app tunnel LaunchAgent (macOS only)
 #   --only <module>   Run only the specified module
 #   --dry-run         Show what would be done without making changes
 #   -h, --help        Show this help message
@@ -38,7 +37,6 @@ SKIP_BREW=false
 SKIP_SHELL=false
 SKIP_GIT=false
 SKIP_PRIVATE=false
-SKIP_TUNNEL=false
 DRY_RUN=false
 ONLY_MODULE=""
 
@@ -73,7 +71,6 @@ while [[ $# -gt 0 ]]; do
         --skip-shell)     SKIP_SHELL=true ;;
         --skip-git)       SKIP_GIT=true ;;
         --skip-private)   SKIP_PRIVATE=true ;;
-        --skip-tunnel)    SKIP_TUNNEL=true ;;
         --only)
             ONLY_MODULE="$2"
             shift
@@ -90,7 +87,7 @@ if [[ -n "$ONLY_MODULE" ]]; then
     FULL=true
     SKIP_SSH=true; SKIP_CLAUDE=true; SKIP_TMUX=true
     SKIP_TAILSCALE=true; SKIP_BREW=true; SKIP_SHELL=true; SKIP_GIT=true
-    SKIP_PRIVATE=true; SKIP_TUNNEL=true
+    SKIP_PRIVATE=true
     case "$ONLY_MODULE" in
         ssh)       SKIP_SSH=false; SKIP_PRIVATE=false ;;
         claude)    SKIP_CLAUDE=false; SKIP_SHELL=false ;;  # claude needs nvm/node from shell setup
@@ -100,7 +97,6 @@ if [[ -n "$ONLY_MODULE" ]]; then
         shell)     SKIP_SHELL=false ;;
         git)       SKIP_GIT=false ;;
         private)   SKIP_PRIVATE=false ;;
-        tunnel)    SKIP_TUNNEL=false ;;
         *) error "Unknown module: $ONLY_MODULE"; exit 1 ;;
     esac
 fi
@@ -433,48 +429,6 @@ setup_claude() {
     install_config "$CLONE_DIR/configs/claude_settings.json" "$HOME/.claude/settings.json"
 }
 
-# ─── UCL app tunnel (macOS LaunchAgent) ─────────────────────────────────────
-setup_tunnel() {
-    if [[ "$SKIP_TUNNEL" == true ]]; then return; fi
-    if [[ "$(uname)" != "Darwin" ]]; then return; fi   # LaunchAgents are macOS-only
-    info "Setting up UCL app tunnel LaunchAgent..."
-
-    local label="com.shr1ram.ucl-app-tunnel"
-    local src="$CLONE_DIR/configs/${label}.plist"
-    local dest="$HOME/Library/LaunchAgents/${label}.plist"
-    local script="$CLONE_DIR/scripts/ucl-app-tunnel.sh"
-
-    if [[ ! -f "$src" ]]; then warn "Tunnel plist missing at $src — skipping."; return; fi
-
-    if [[ "$DRY_RUN" == true ]]; then
-        info "[DRY RUN] Would install $dest (HOME-substituted) and load it via launchctl"
-        return
-    fi
-
-    chmod +x "$script"
-    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
-
-    # Substitute __HOME__ with the real home dir; install only if changed.
-    local tmp; tmp="$(mktemp)"
-    sed "s|__HOME__|$HOME|g" "$src" > "$tmp"
-    if [[ -f "$dest" ]] && diff -q "$tmp" "$dest" &>/dev/null; then
-        ok "Tunnel LaunchAgent already up to date"
-        rm -f "$tmp"
-    else
-        backup_file "$dest"
-        mv "$tmp" "$dest"
-        ok "Installed $dest"
-    fi
-
-    # Reload: unload (ignore errors) then load so changes take effect now.
-    launchctl unload "$dest" 2>/dev/null || true
-    if launchctl load "$dest" 2>/dev/null; then
-        ok "Tunnel loaded — localhost:8000 -> bufflehead (auto-reconnects on wake)"
-    else
-        warn "launchctl load failed; load manually: launchctl load $dest"
-    fi
-}
-
 # ─── Private repo ───────────────────────────────────────────────────────────
 setup_private() {
     if [[ "$SKIP_PRIVATE" == true ]]; then return; fi
@@ -542,7 +496,6 @@ main() {
     setup_tailscale
     setup_gh
     setup_claude
-    setup_tunnel
     setup_private
 
     echo ""
