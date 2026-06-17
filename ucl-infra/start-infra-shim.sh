@@ -31,10 +31,19 @@ fi
 cd "$DIR"
 INFRA_SHIM_ROOT="$ROOT" INFRA_SHIM_PORT="$PORT" INFRA_SHIM_HOST="$HOST" nohup "$PY" server.py > "$LOG" 2>&1 &
 echo "Shim PID: $!"
+# Ready = OUR shim answers. We check /api/list_runs with THIS root's session key,
+# not just /docs: a /docs 200 could be a DIFFERENT process that happened to grab
+# this port (collision), which would route the lease to the wrong shim. A 200 on
+# an authenticated endpoint with our key proves it's the shim we just started.
+key="$(cat "$ROOT/session_key")"
 for i in $(seq 1 20); do
-  curl -fsS -m 2 "http://$HOST:$PORT/docs" >/dev/null 2>&1 && { echo "up after ${i}s on :$PORT"; exit 0; }
+  if curl -fsS -m 2 -X POST "http://$HOST:$PORT/api/list_runs" \
+       -H 'Content-Type: application/json' \
+       -d "{\"session_key\":\"$key\"}" 2>/dev/null | grep -q '"runs"'; then
+    echo "up after ${i}s on :$PORT (authenticated)"; exit 0
+  fi
   sleep 1
 done
-echo "Shim did not come up; last log lines:" >&2
+echo "Shim did not come up (or another process holds :$PORT); last log lines:" >&2
 tail -20 "$LOG" >&2
 exit 1

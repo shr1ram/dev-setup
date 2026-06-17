@@ -34,6 +34,12 @@ SSH_OPTS=(-o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o RequestTTY
 
 blog() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$BROKER_LOG"; }
 
+# Reject identifiers that aren't a safe token before they reach shell-eval'd
+# command strings or filesystem paths (a crafted run_id/holder could otherwise
+# inject commands or escape the leases dir). Allow [A-Za-z0-9._:-] only; ':' is
+# permitted for the "llm:<app>" lease-id convention.
+valid_id() { case "$1" in *[!A-Za-z0-9._:-]*|'') return 1 ;; *) return 0 ;; esac; }
+
 # The box this broker is running on (the app/serving box).
 self_fqdn() { hostname -f 2>/dev/null || hostname; }
 # lab-gpu-aylesbury-l  <->  aylesbury-l.cs.ucl.ac.uk
@@ -41,19 +47,34 @@ fqdn_to_alias() { echo "lab-gpu-${1%%.*}"; }   # aylesbury-l.cs.ucl.ac.uk -> lab
 alias_to_fqdn() { echo "${1#lab-gpu-}.cs.ucl.ac.uk"; }
 
 # --- lease file (JSON object keyed by run_id), guarded by flock -----------------
-ensure_leases() { [ -s "$LEASES" ] || echo '{}' > "$LEASES"; }
+# Seed an empty lease file. MUST be called only while holding the flock — doing
+# the size-check+write outside the lock races a concurrent claim/release and can
+# clobber leases.json, losing active entries (cubic).
+_ensure_leases_locked() { [ -s "$LEASES" ] || echo '{}' > "$LEASES"; }
 
 # run a python snippet against the lease file under an exclusive lock. The python
-# reads LEASES (json), receives argv, prints whatever it wants to stdout.
+# reads LEASES (json), receives argv, prints whatever it wants to stdout. The lock
+# is on a SEPARATE file ($LEASES_LOCK), so we can acquire it before the data file
+# exists, then seed the data file inside the critical section.
 with_leases_lock() {  # with_leases_lock <py-snippet> [args...]
   local snippet="$1"; shift
-  ensure_leases
   exec 9>"$LEASES_LOCK"
   flock 9
+  _ensure_leases_locked
   LEASES_PATH="$LEASES" python3 -c "$snippet" "$@"
   local rc=$?
   flock -u 9
   return $rc
+}
+
+# Seed the lease file if missing, holding the lock (for callers that then read it
+# directly, e.g. gpu-leases.sh). Read-only consumers should still expect the file
+# to be a complete JSON object since every writer writes it atomically under lock.
+ensure_leases() {
+  exec 9>"$LEASES_LOCK"
+  flock 9
+  _ensure_leases_locked
+  flock -u 9
 }
 
 # Is a TCP port already LISTENing locally?

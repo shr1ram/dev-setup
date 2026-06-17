@@ -18,6 +18,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/gpu-broker-lib.sh"
 
 HOLDER="${1:?usage: claim-llm-gpu.sh <holder>}"
+# holder is interpolated into command strings + paths — reject unsafe tokens.
+valid_id "$HOLDER" || { echo '{"error":"invalid holder"}'; exit 2; }
 LEASE_ID="llm:$HOLDER"
 OLLAMA_BASE=11435   # wake-proxy port on the GPU box (loopback)
 
@@ -64,12 +66,16 @@ print(sp, tp)
 box_fqdn=$(alias_to_fqdn "$chosen")
 blog "claim-llm $HOLDER: chose $chosen (local=$chosen_local) proxy=$proxy_port tunnel=$tunnel_port"
 
-# Start the wake-proxy on the chosen box at proxy_port.
+# Start the wake-proxy on the chosen box at proxy_port. Remote: connect by FQDN
+# (not the lab-gpu-* alias, which carries ProxyJump/forced-RemoteCommand/socket
+# options that break box-to-box ssh) and pipe the command to bash via stdin (the
+# login shell is csh). Mirrors claim-gpu.sh's remote shim start.
 start_cmd="OLLAMA_PROXY_PORT=$proxy_port bash $DIR/start-ollama-proxy.sh"
 if [ "$chosen_local" = true ]; then
   eval "$start_cmd" >>"$BROKER_LOG" 2>&1 || { echo '{"error":"wake-proxy failed (local)"}'; exit 1; }
 else
-  ssh "${SSH_OPTS[@]}" "$chosen" "bash -lc '$start_cmd'" >>"$BROKER_LOG" 2>&1 || { echo '{"error":"wake-proxy failed (remote)"}'; exit 1; }
+  printf '%s\n' "$start_cmd" | ssh "${SSH_OPTS[@]}" "$box_fqdn" bash >>"$BROKER_LOG" 2>&1 \
+    || { echo '{"error":"wake-proxy failed (remote)"}'; exit 1; }
 fi
 
 # Tunnel: app box localhost:tunnel_port -> chosen box :proxy_port.

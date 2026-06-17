@@ -17,6 +17,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 RUN_ID="${1:?usage: claim-gpu.sh <run_id> [holder]}"
 HOLDER="${2:-unknown}"
+# run_id/holder are interpolated into command strings + paths — reject anything
+# that isn't a safe token to prevent command/path injection.
+valid_id "$RUN_ID"  || { echo '{"error":"invalid run_id"}'; exit 2; }
+valid_id "$HOLDER"  || { echo '{"error":"invalid holder"}'; exit 2; }
 
 # 1) Already leased? Return it unchanged (idempotent).
 existing=$(with_leases_lock '
@@ -56,23 +60,54 @@ if [ -z "$chosen" ]; then
   exit 3
 fi
 
-# 3) Allocate lease-private ports not already in use by another lease.
-#    Port-base config is passed via the environment (exported here) because the
-#    python snippet reads it from os.environ.
+# 3) ATOMICALLY reserve box + ports + key in ONE locked transaction. This closes
+#    the select/allocate/persist race (cubic): the scan above is unlocked (it does
+#    slow SSH probes), so two concurrent claims could pick the same free box. The
+#    reserve RE-CHECKS under the lock that $chosen isn't already leased and that
+#    the chosen ports are free, then writes a "reserving" placeholder lease so any
+#    concurrent claim sees them taken. If the box was grabbed first, the reserve
+#    prints CONFLICT and we bail (the caller can retry).
 export SHIM_PORT_BASE TUNNEL_PORT_BASE PORT_SPAN
-read -r shim_port tunnel_port < <(with_leases_lock '
-import json, os
-d = json.load(open(os.environ["LEASES_PATH"]))
+session_key=$(openssl rand -hex 16)
+box_fqdn=$(alias_to_fqdn "$chosen")
+reserve=$(RUN_ID="$RUN_ID" CHOSEN="$chosen" CHOSEN_FQDN="$box_fqdn" CHOSEN_LOCAL="$chosen_local" \
+          SKEY="$session_key" HOLDER="$HOLDER" with_leases_lock '
+import json, os, time
+path = os.environ["LEASES_PATH"]
+d = json.load(open(path))
+run_id = os.environ["RUN_ID"]; box = os.environ["CHOSEN"]
+# Re-check under the lock: box not already leased to a DIFFERENT run.
+if any(v["box"] == box and k != run_id for k, v in d.items()):
+    print("CONFLICT"); raise SystemExit
 used_s = {v["shim_port"] for v in d.values()}
 used_t = {v["tunnel_port"] for v in d.values()}
 SB=int(os.environ["SHIM_PORT_BASE"]); TB=int(os.environ["TUNNEL_PORT_BASE"]); N=int(os.environ["PORT_SPAN"])
-sp = next(p for p in range(SB, SB+N) if p not in used_s)
-tp = next(p for p in range(TB, TB+N) if p not in used_t)
+try:
+    sp = next(p for p in range(SB, SB+N) if p not in used_s)
+    tp = next(p for p in range(TB, TB+N) if p not in used_t)
+except StopIteration:
+    print("CONFLICT"); raise SystemExit
+# Write a placeholder lease so concurrent claims see this box+ports reserved.
+d[run_id] = {"run_id": run_id, "holder": os.environ["HOLDER"], "box": box,
+             "box_fqdn": os.environ["CHOSEN_FQDN"], "shim_port": sp, "tunnel_port": tp,
+             "session_key": os.environ["SKEY"], "local": os.environ["CHOSEN_LOCAL"] == "true",
+             "claimed_at": int(time.time()), "status": "reserving"}
+json.dump(d, open(path, "w"), indent=2)
 print(sp, tp)
 ')
+if [ "$reserve" = "CONFLICT" ] || [ -z "$reserve" ]; then
+  blog "claim $RUN_ID: reserve CONFLICT on $chosen (lost the race) — caller may retry"
+  echo '{"error":"no free GPU available"}'
+  exit 3
+fi
+read -r shim_port tunnel_port <<<"$reserve"
 
-session_key=$(openssl rand -hex 16)
-box_fqdn=$(alias_to_fqdn "$chosen")
+# From here the reservation exists; any failure must release it (and tear down
+# whatever partially started) so the box/ports don't leak. release-gpu.sh is
+# idempotent and handles the placeholder lease. Cleared once we finalize.
+_reserved=1
+cleanup_reservation() { [ "${_reserved:-0}" = 1 ] && "$HERE/release-gpu.sh" "$RUN_ID" >/dev/null 2>&1 || true; }
+trap cleanup_reservation EXIT
 # Each lease gets its OWN shim ROOT (private session_key + workspace + runs.json),
 # so concurrent shims never collide on the shared ucl-infra/ files. server.py
 # honours INFRA_SHIM_ROOT. The root lives ON the GPU box; for the local box it's
@@ -106,18 +141,21 @@ ok=false
 for i in $(seq 1 15); do port_listening "$tunnel_port" && { ok=true; break; }; sleep 1; done
 $ok || { echo '{"error":"tunnel failed to come up"}'; exit 1; }
 
-# 6) Record the lease.
+# 6) Finalize the reservation: drop the "reserving" status so the lease is live.
+#    (The placeholder already holds box/ports/key, written atomically in step 3.)
 with_leases_lock '
-import json, os, sys, time
+import json, os, sys
 path = os.environ["LEASES_PATH"]
 d = json.load(open(path))
-run_id, holder, box, box_fqdn, sp, tp, key, local = sys.argv[1:9]
-d[run_id] = {"run_id": run_id, "holder": holder, "box": box, "box_fqdn": box_fqdn,
-             "shim_port": int(sp), "tunnel_port": int(tp), "session_key": key,
-             "local": local == "true", "claimed_at": int(time.time())}
-json.dump(d, open(path, "w"), indent=2)
-' "$RUN_ID" "$HOLDER" "$chosen" "$box_fqdn" "$shim_port" "$tunnel_port" "$session_key" "$chosen_local" >/dev/null
+e = d.get(sys.argv[1])
+if e:
+    e.pop("status", None)
+    json.dump(d, open(path, "w"), indent=2)
+' "$RUN_ID" >/dev/null
 
+# Success — keep the lease; disarm the cleanup trap.
+_reserved=0
+trap - EXIT
 blog "claim $RUN_ID: leased $chosen -> localhost:$tunnel_port"
 printf '{"run_id":"%s","INFRA_SERVER_URL":"http://127.0.0.1:%d","INFRA_SESSION_KEY":"%s","box":"%s","local":%s}\n' \
   "$RUN_ID" "$tunnel_port" "$session_key" "$chosen" "$chosen_local"

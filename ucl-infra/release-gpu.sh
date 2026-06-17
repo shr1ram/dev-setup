@@ -7,6 +7,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/gpu-broker-lib.sh"
 
 RUN_ID="${1:?usage: release-gpu.sh <run_id>}"
+# run_id is interpolated into command strings + paths — reject unsafe tokens.
+valid_id "$RUN_ID" || { echo "invalid run_id" >&2; exit 2; }
 
 lease=$(with_leases_lock '
 import json, os, sys
@@ -37,11 +39,26 @@ fi
 rm -f "$DIR/tunnel-$tunnel_port.log" 2>/dev/null || true
 
 # 2) Stop the service on the GPU box bound to shim_port. For an experiment lease
-#    that's the server.py shim; for an LLM lease it's the Ollama wake-proxy (and
-#    its on-demand `ollama serve`). Match by port so we never kill another
-#    lease's service.
+#    that's the server.py shim; for an LLM lease it's the Ollama wake-proxy.
+#    Always match by PORT so we never touch another lease's service.
+#
+#    LLM: kill only the wake-proxy on THIS lease's port. We do NOT pkill the proxy
+#    or `ollama serve` by name — another lease on the same box may have its own
+#    proxy/ollama, and a global pkill would clobber it (cubic). `ollama serve` is
+#    shut down only when no wake-proxy remains on the box (i.e. this was the last
+#    LLM lease here), found by scanning the proxy's port range rather than by name.
 if [ "$kind" = "llm" ]; then
-  stop_cmd="for pid in \$(lsof -tiTCP:$shim_port -sTCP:LISTEN 2>/dev/null); do kill \$pid 2>/dev/null; done; pkill -f \"ollama-wake-proxy.py\" 2>/dev/null; pkill -f \"ollama serve\" 2>/dev/null; true"
+  stop_cmd="$(cat <<EOS
+for pid in \$(lsof -tiTCP:$shim_port -sTCP:LISTEN 2>/dev/null); do kill \$pid 2>/dev/null; done
+sleep 1
+remaining=0
+for p in \$(seq $SHIM_PORT_BASE $((SHIM_PORT_BASE + PORT_SPAN - 1))); do
+  lsof -tiTCP:\$p -sTCP:LISTEN >/dev/null 2>&1 && remaining=1 && break
+done
+if [ "\$remaining" = 0 ]; then for pid in \$(pgrep -f 'ollama serve' 2>/dev/null); do kill \$pid 2>/dev/null; done; fi
+true
+EOS
+)"
 else
   stop_cmd="for pid in \$(lsof -tiTCP:$shim_port -sTCP:LISTEN 2>/dev/null); do kill \$pid 2>/dev/null; done; true"
 fi
