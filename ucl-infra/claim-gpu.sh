@@ -115,24 +115,41 @@ read -r shim_port tunnel_port <<<"$reserve"
 _reserved=1
 cleanup_reservation() {
   [ "${_reserved:-0}" = 1 ] || return 0
-  # kill the loopback tunnel on tunnel_port (app box)
+  # IMPORTANT: only kill listeners we can confirm are OURS. If the reservation
+  # vanished (concurrent release/prune), another claim may have grabbed these same
+  # ports and started ITS shim/tunnel — a blind port-based kill would terminate
+  # that lease (cubic). So we match on identity, not just the port.
+
+  # Tunnel: kill the ssh -L on tunnel_port ONLY if its command line is exactly our
+  # forward (-L 127.0.0.1:<tunnel_port>:127.0.0.1:<shim_port>). A different run's
+  # tunnel has a different shim_port in its forward spec.
   local tp; tp=$(lsof -tiTCP:"${tunnel_port:-0}" -sTCP:LISTEN 2>/dev/null | head -1 || true)
-  [ -n "$tp" ] && kill "$tp" 2>/dev/null || true
+  if [ -n "$tp" ]; then
+    if tr '\0' ' ' < "/proc/$tp/cmdline" 2>/dev/null | grep -q -- "127.0.0.1:${tunnel_port}:127.0.0.1:${shim_port}"; then
+      kill "$tp" 2>/dev/null || true
+    fi
+  fi
   rm -f "$DIR/tunnel-${tunnel_port:-x}.log" 2>/dev/null || true
-  # stop the shim on the chosen box (by port) + remove its private root
-  local sc="for pid in \$(lsof -tiTCP:${shim_port:-0} -sTCP:LISTEN 2>/dev/null); do kill \$pid 2>/dev/null; done; rm -rf '$DIR/leases/$RUN_ID'; true"
+
+  # Shim: kill the process on shim_port ONLY if its INFRA_SHIM_ROOT is OUR lease
+  # root (leases/$RUN_ID). Another run's shim on a reassigned port has a different
+  # root, so it is left alone. Done on the box that owns the shim.
+  local root="$DIR/leases/$RUN_ID"
+  local sc="for pid in \$(lsof -tiTCP:${shim_port:-0} -sTCP:LISTEN 2>/dev/null); do
+      if tr '\0' '\n' < /proc/\$pid/environ 2>/dev/null | grep -qx \"INFRA_SHIM_ROOT=$root\"; then kill \$pid 2>/dev/null; fi
+    done; rm -rf '$root'; true"
   if [ "${chosen_local:-true}" = true ]; then
     bash -c "$sc" >/dev/null 2>&1 || true
   else
     printf '%s\n' "$sc" | ssh "${SSH_OPTS[@]}" "${box_fqdn:-}" bash >/dev/null 2>&1 || true
   fi
-  # best-effort drop the lease entry (no-op if already gone)
+  # best-effort drop OUR lease entry (no-op if already gone)
   with_leases_lock '
 import json, os, sys
 p = os.environ["LEASES_PATH"]; d = json.load(open(p)); d.pop(sys.argv[1], None)
 json.dump(d, open(p, "w"), indent=2)
 ' "$RUN_ID" >/dev/null 2>&1 || true
-  blog "claim $RUN_ID: cleanup torn down shim/tunnel (port $shim_port/$tunnel_port)"
+  blog "claim $RUN_ID: cleanup torn down OUR shim/tunnel (port $shim_port/$tunnel_port)"
 }
 trap cleanup_reservation EXIT
 # Each lease gets its OWN shim ROOT (private session_key + workspace + runs.json),
