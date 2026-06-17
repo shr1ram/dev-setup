@@ -23,6 +23,10 @@ if [ -f "$HOSTS_ENV" ]; then
     REMOTE_FQDN="${UCL_APP_FQDN:-$REMOTE_FQDN}"
 fi
 LOCAL_PORT=8000
+# Second app on the same box (the "dev" worktree) runs on :8001 alongside the
+# primary "serve" worktree on :8000. Forward both so the Mac can reach each:
+#   localhost:8000 -> serve,  localhost:8001 -> dev.
+DEV_PORT=8001
 
 exec ssh \
     -o ControlMaster=no -o ControlPath=none \
@@ -31,4 +35,6 @@ exec ssh \
     -o TCPKeepAlive=yes \
     -o BatchMode=yes \
     -o StrictHostKeyChecking=accept-new \
-    -N -L "${LOCAL_PORT}:${REMOTE_FQDN}:${LOCAL_PORT}" "$REMOTE_HOST"
+    -N \
+    -L "${LOCAL_PORT}:${REMOTE_FQDN}:${LOCAL_PORT}" \
+    -L "${DEV_PORT}:${REMOTE_FQDN}:${DEV_PORT}" "$REMOTE_HOST"
