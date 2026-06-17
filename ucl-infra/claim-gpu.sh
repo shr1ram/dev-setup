@@ -87,7 +87,8 @@ if [ "$chosen_local" = true ]; then
   bash -c "$mk_root_cmd" && eval "$start_shim_cmd" >>"$BROKER_LOG" 2>&1 \
     || { echo '{"error":"shim failed to start (local)"}'; exit 1; }
 else
-  ssh "${SSH_OPTS[@]}" "$chosen" "bash -lc '$mk_root_cmd; $start_shim_cmd'" >>"$BROKER_LOG" 2>&1 \
+  printf '%s\n%s\n' "$mk_root_cmd" "$start_shim_cmd" \
+    | ssh "${SSH_OPTS[@]}" "$box_fqdn" bash >>"$BROKER_LOG" 2>&1 \
     || { echo '{"error":"shim failed to start (remote)"}'; exit 1; }
 fi
 

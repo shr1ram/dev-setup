@@ -48,7 +48,7 @@ fi
 if [ "$is_local" = true ]; then
   bash -c "$stop_cmd" >/dev/null 2>&1 || true
 else
-  ssh "${SSH_OPTS[@]}" "$box" "bash -lc '$stop_cmd'" >/dev/null 2>&1 || true
+  printf '%s\n' "$stop_cmd" | ssh "${SSH_OPTS[@]}" "$box_fqdn" bash >/dev/null 2>&1 || true
 fi
 blog "release $RUN_ID: stopped shim on $box :$shim_port"
 
@@ -60,7 +60,7 @@ lease_root="$DIR/leases/$RUN_ID"
 if [ "$is_local" = true ]; then
   rm -rf "$lease_root" 2>/dev/null || true
 else
-  ssh "${SSH_OPTS[@]}" "$box" "rm -rf '$lease_root'" 2>/dev/null || true
+  printf 'rm -rf %q\n' "$lease_root" | ssh "${SSH_OPTS[@]}" "$box_fqdn" bash 2>/dev/null || true
 fi
 
 # 4) Drop the lease.

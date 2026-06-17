@@ -23,7 +23,13 @@ SHIM_PORT_BASE=8780     # shim listens here ON the GPU box (loopback)
 TUNNEL_PORT_BASE=8781   # app box forwards localhost:<this> -> gpu box :shim_port
 PORT_SPAN=40            # supports up to ~40 concurrent leases
 
-SSH_OPTS=(-o ControlMaster=no -o ControlPath=none -o BatchMode=yes
+# Box-to-box SSH from the app box to a peer GPU box. We connect by the box's
+# FQDN (e.g. wigeon-l.cs.ucl.ac.uk), NOT the lab-gpu-* ssh-config alias: the
+# alias carries ProxyJump knuckles + a forced `RemoteCommand /bin/bash` + a
+# ControlPath under ~/.ssh/sockets that doesn't exist box-side — all of which
+# break a plain `ssh host cmd`. The FQDN resolves on the internal network and
+# takes a command argument cleanly. ControlMaster/Path off avoids the socket dir.
+SSH_OPTS=(-o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o RequestTTY=no
           -o ConnectTimeout=12 -o StrictHostKeyChecking=accept-new)
 
 blog() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$BROKER_LOG"; }
@@ -59,7 +65,8 @@ gpu_is_free() {  # gpu_is_free <ssh-target-or-empty-for-local>
   if [ -z "$target" ]; then
     out=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader 2>/dev/null | head -1)
   else
-    out=$(ssh "${SSH_OPTS[@]}" "$target" 'nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader 2>/dev/null | head -1' 2>/dev/null)
+    # $target is an alias (lab-gpu-foo-l) — SSH via its FQDN (see SSH_OPTS note).
+    out=$(ssh "${SSH_OPTS[@]}" "$(alias_to_fqdn "$target")" 'nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader 2>/dev/null | head -1' 2>/dev/null)
   fi
   [ -n "$out" ] || return 1
   local util used total
