@@ -66,7 +66,15 @@ gpu_is_free() {  # gpu_is_free <ssh-target-or-empty-for-local>
     out=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader 2>/dev/null | head -1)
   else
     # $target is an alias (lab-gpu-foo-l) — SSH via its FQDN (see SSH_OPTS note).
-    out=$(ssh "${SSH_OPTS[@]}" "$(alias_to_fqdn "$target")" 'nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader 2>/dev/null | head -1' 2>/dev/null)
+    # Two gotchas baked in here:
+    #  -n           : without it ssh reads stdin; inside a `while read box` loop it
+    #                 swallows the remaining loop input and the scan stops after the
+    #                 first remote box.
+    #  bash -c '...' : the boxes' login shell is csh, which can't parse `2>/dev/null`
+    #                 ("Ambiguous output redirect"). Force bash for the command so
+    #                 the redirects + pipe work.
+    out=$(ssh -n "${SSH_OPTS[@]}" "$(alias_to_fqdn "$target")" \
+      "bash -c 'nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader 2>/dev/null | head -1'" 2>/dev/null)
   fi
   [ -n "$out" ] || return 1
   local util used total
