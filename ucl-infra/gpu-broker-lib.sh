@@ -38,7 +38,18 @@ blog() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$BROKER_LOG"
 # command strings or filesystem paths (a crafted run_id/holder could otherwise
 # inject commands or escape the leases dir). Allow [A-Za-z0-9._:-] only; ':' is
 # permitted for the "llm:<app>" lease-id convention.
-valid_id() { case "$1" in *[!A-Za-z0-9._:-]*|'') return 1 ;; *) return 0 ;; esac; }
+#
+# CRUCIALLY also reject "." / ".." and any "/" so the id can't traverse out of the
+# leases dir — release-gpu.sh does `rm -rf "$DIR/leases/<id>"`, so a "../.." id
+# would target (and destroy) parent directories.
+valid_id() {
+  case "$1" in
+    *[!A-Za-z0-9._:-]*|'' ) return 1 ;;   # charset whitelist (no "/")
+    .|..|*/* )              return 1 ;;   # exact dot/dotdot, or any slash
+    *..* )                  return 1 ;;   # any ".." substring (path traversal)
+    *) return 0 ;;
+  esac
+}
 
 # The box this broker is running on (the app/serving box).
 self_fqdn() { hostname -f 2>/dev/null || hostname; }

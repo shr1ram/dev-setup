@@ -76,8 +76,12 @@ import json, os, time
 path = os.environ["LEASES_PATH"]
 d = json.load(open(path))
 run_id = os.environ["RUN_ID"]; box = os.environ["CHOSEN"]
-# Re-check under the lock: box not already leased to a DIFFERENT run.
-if any(v["box"] == box and k != run_id for k, v in d.items()):
+# Re-check under the lock. A finalized idempotent lease for this run_id was
+# already returned earlier (before the scan), so ANY entry here -- including one
+# keyed by this same run_id -- means a CONCURRENT reservation is in flight; treat
+# it as a conflict so two concurrent claims for the same run cannot overwrite each
+# other. Likewise any OTHER run already holding this box conflicts.
+if run_id in d or any(v["box"] == box for v in d.values()):
     print("CONFLICT"); raise SystemExit
 used_s = {v["shim_port"] for v in d.values()}
 used_t = {v["tunnel_port"] for v in d.values()}
@@ -143,15 +147,25 @@ $ok || { echo '{"error":"tunnel failed to come up"}'; exit 1; }
 
 # 6) Finalize the reservation: drop the "reserving" status so the lease is live.
 #    (The placeholder already holds box/ports/key, written atomically in step 3.)
-with_leases_lock '
+#    If the reservation entry has vanished (e.g. a concurrent release/prune removed
+#    it), FAIL — exit non-zero so the EXIT trap tears down the shim/tunnel we
+#    started and we don't print success for a lease that isn't persisted.
+finalize=$(with_leases_lock '
 import json, os, sys
 path = os.environ["LEASES_PATH"]
 d = json.load(open(path))
 e = d.get(sys.argv[1])
-if e:
-    e.pop("status", None)
-    json.dump(d, open(path, "w"), indent=2)
-' "$RUN_ID" >/dev/null
+if not e:
+    print("MISSING"); raise SystemExit
+e.pop("status", None)
+json.dump(d, open(path, "w"), indent=2)
+print("OK")
+' "$RUN_ID")
+if [ "$finalize" != "OK" ]; then
+  blog "claim $RUN_ID: reservation vanished before finalize — aborting (trap will clean up)"
+  echo '{"error":"reservation lost before finalize"}'
+  exit 1
+fi
 
 # Success — keep the lease; disarm the cleanup trap.
 _reserved=0
