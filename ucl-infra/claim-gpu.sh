@@ -123,9 +123,12 @@ cleanup_reservation() {
   # Tunnel: kill the ssh -L on tunnel_port ONLY if its command line is exactly our
   # forward (-L 127.0.0.1:<tunnel_port>:127.0.0.1:<shim_port>). A different run's
   # tunnel has a different shim_port in its forward spec.
+  # grep -F throughout: the forward spec and the lease root contain '.' chars (and
+  # run_id may contain '.'), which as a regex would match unintended strings and
+  # could kill the wrong shim/tunnel (cubic). Fixed-string matching only.
   local tp; tp=$(lsof -tiTCP:"${tunnel_port:-0}" -sTCP:LISTEN 2>/dev/null | head -1 || true)
   if [ -n "$tp" ]; then
-    if tr '\0' ' ' < "/proc/$tp/cmdline" 2>/dev/null | grep -q -- "127.0.0.1:${tunnel_port}:127.0.0.1:${shim_port}"; then
+    if tr '\0' ' ' < "/proc/$tp/cmdline" 2>/dev/null | grep -qF -- "127.0.0.1:${tunnel_port}:127.0.0.1:${shim_port}"; then
       kill "$tp" 2>/dev/null || true
     fi
   fi
@@ -136,7 +139,7 @@ cleanup_reservation() {
   # root, so it is left alone. Done on the box that owns the shim.
   local root="$DIR/leases/$RUN_ID"
   local sc="for pid in \$(lsof -tiTCP:${shim_port:-0} -sTCP:LISTEN 2>/dev/null); do
-      if tr '\0' '\n' < /proc/\$pid/environ 2>/dev/null | grep -qx \"INFRA_SHIM_ROOT=$root\"; then kill \$pid 2>/dev/null; fi
+      if tr '\0' '\n' < /proc/\$pid/environ 2>/dev/null | grep -qxF \"INFRA_SHIM_ROOT=$root\"; then kill \$pid 2>/dev/null; fi
     done; rm -rf '$root'; true"
   if [ "${chosen_local:-true}" = true ]; then
     bash -c "$sc" >/dev/null 2>&1 || true
