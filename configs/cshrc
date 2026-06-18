@@ -13,9 +13,17 @@ if ( -d "$HOME/.nvm/versions/node" ) then
     endif
 endif
 
-# UCL: redirect tool caches to the large project filesystem, not the small
-# 10GB home. Guarded so it's a no-op anywhere the project space doesn't exist
-# (e.g. the Mac). Existing caches were symlinked here too.
+# UCL: redirect tool caches AND user-installed packages to the large project
+# filesystem, not the small 10GB home. Guarded so it's a no-op anywhere the
+# project space doesn't exist (e.g. the Mac). Existing caches were symlinked here.
+#
+# Two classes of home-bloat:
+#   1. Env-redirectable (below): caches + `pip install --user` (PYTHONUSERBASE).
+#   2. NOT env-redirectable — hardcoded paths. These are SYMLINKED to the project
+#      FS instead (~/.local -> $_proj/home-dirs/.local, ~/.vscode-server ->
+#      $_proj/home-dirs/.vscode-server). VS Code Remote and pip --user write
+#      through the symlink, so they stay off the quota. If a fresh machine
+#      recreates them as real dirs, re-run the symlink (see dev-setup notes).
 if ( -d /cs/student/project_msc/2025/csml/sruppage ) then
     set _proj = /cs/student/project_msc/2025/csml/sruppage
     setenv XDG_CACHE_HOME "$_proj/.cache"
@@ -24,6 +32,9 @@ if ( -d /cs/student/project_msc/2025/csml/sruppage ) then
     setenv PIP_CACHE_DIR  "$_proj/.cache/pip"
     setenv NPM_CONFIG_CACHE "$_proj/.npm-cache"
     setenv WANDB_CACHE_DIR "$_proj/.cache/wandb"
+    # `pip install --user` / Python user-site -> project FS, not ~/.local (was
+    # 5.9GB of py3.9 user packages eating the home quota).
+    setenv PYTHONUSERBASE "$_proj/home-dirs/.local"
     unset _proj
 endif
 

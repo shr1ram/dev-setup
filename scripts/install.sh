@@ -545,6 +545,14 @@ main() {
     setup_tunnel
     setup_private
 
+    # UCL only: relocate big non-redirectable home dirs (~/.local, ~/.vscode-server)
+    # to the project FS so they don't eat the 10GB home quota. Self-guards + no-ops
+    # off a UCL box; idempotent (skips already-symlinked dirs).
+    if [[ -d /cs/student/project_msc/2025/csml/sruppage ]]; then
+        info "Offloading large home dirs to the project filesystem (UCL)..."
+        bash "$CLONE_DIR/scripts/ucl-home-offload.sh" || warn "home offload reported an error"
+    fi
+
     echo ""
     echo "╔══════════════════════════════════════╗"
     echo "║           Setup Complete!            ║"
