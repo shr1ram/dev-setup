@@ -157,6 +157,21 @@ fi
 # ship stale config — exactly the :11434-vs-:11435 wake-proxy regression. We
 # always regenerate from the fragments so the running app matches the source.
 # --compose-only writes .env + .onemancompany/.env without needing the backend.
+#
+# Provision switch.sh from the tracked copy in this repo (scripts/memento-switch.sh)
+# so the box always runs the version-controlled composer rather than a hand-edited
+# box-local copy. switch.sh is .git-excluded inside the Memento worktree (it's
+# deploy glue, and its env-profiles/* fragments hold secrets), so dev-setup is its
+# source of truth. Piped over stdin (the worktree's csh login shell mangles inline
+# heredocs); bash -lc cats it into place.
+SWITCH_SRC="$HOME/dev-setup/scripts/memento-switch.sh"
+if [ -f "$SWITCH_SRC" ]; then
+  info "Provisioning switch.sh on $APP from tracked copy ..."
+  ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'cat > $REPO/switch.sh && chmod +x $REPO/switch.sh'" < "$SWITCH_SRC" \
+    || warn "switch.sh provisioning reported an error — box will use its existing copy"
+else
+  warn "tracked switch.sh ($SWITCH_SRC) not found — box will use its existing copy"
+fi
 INFRA_PROFILE=$(ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'grep -E ^INFRA= $REPO/env-profiles/current 2>/dev/null | cut -d= -f2'" 2>/dev/null | tr -d '[:space:]')
 INFRA_PROFILE="${INFRA_PROFILE:-ucl}"
 info "Recomposing .env on $APP (llm=$LLM_PROFILE infra=$INFRA_PROFILE) ..."
