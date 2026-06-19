@@ -95,7 +95,9 @@ info "LLM profile = $LLM_PROFILE -> need $NEED box(es) (mode=$MODE)"
 # teardown becomes a valid candidate again. Skipped on --dry-run.
 if ! $DRY; then
   DOWN="$(dirname "${BASH_SOURCE[0]}")/ucl-down.sh"
-  if [ -x "$DOWN" ]; then
+  # We invoke it via `bash "$DOWN"`, so it only needs to be READABLE, not +x
+  # (a missing exec bit was silently skipping teardown).
+  if [ -f "$DOWN" ]; then
     info "Tearing down any previous deployment (clean slate)..."
     bash "$DOWN" --quiet || warn "teardown reported an error (continuing)"
   else
