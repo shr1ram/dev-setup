@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 # ucl-up.sh — bring the Memento/AutoResearch stack up on UCL GPUs from the Mac.
 #
-# Picks free GPU box(es), SSHes in, starts the app + (local) Ollama + infra shim,
-# wires the tunnels, writes the chosen hosts to ~/dev-setup/ucl-hosts.env, and
-# reloads the Mac->app LaunchAgent so localhost:8000 points at the new box.
+# TEARS DOWN any previous deployment everywhere first (ucl-down.sh), then picks a
+# free GPU box, SSHes in, starts the app (+ local Ollama proxy when llm=local),
+# writes the chosen host to ~/dev-setup/ucl-hosts.env, and reloads the Mac->app
+# LaunchAgent so localhost:8000 points at the new box.
+#
+# Experiment GPUs are ON-DEMAND: the app runs with the GPU broker (default on),
+# which claims a free GPU + spins up a per-run shim only WHEN an experiment runs.
+# There is no always-on static shim, so nothing experiment-related is started
+# here — the broker scripts already live on every box at $PROJ/ucl-infra.
 #
 # Host count is decided by the LLM profile (env-profiles/current on the box):
 #   LLM=local -> 2 boxes (Ollama needs a GPU + experiments need a separate one)
@@ -82,6 +88,21 @@ case "$MODE" in
 esac
 info "LLM profile = $LLM_PROFILE -> need $NEED box(es) (mode=$MODE)"
 
+# --- TEAR DOWN any previous deployment everywhere FIRST ---
+# A clean slate before we pick a box: otherwise a stale app keeps running on the
+# box we moved off of (e.g. the tunnel pointed at scaup while we'd redeployed on
+# bufflehead). Running this before the free-box scan also means a box freed by
+# teardown becomes a valid candidate again. Skipped on --dry-run.
+if ! $DRY; then
+  DOWN="$(dirname "${BASH_SOURCE[0]}")/ucl-down.sh"
+  if [ -x "$DOWN" ]; then
+    info "Tearing down any previous deployment (clean slate)..."
+    bash "$DOWN" --quiet || warn "teardown reported an error (continuing)"
+  else
+    warn "ucl-down.sh not found next to ucl-up.sh — skipping teardown"
+  fi
+fi
+
 # --- select hosts (pinned override, else auto-pick free) ---
 APP=""; INFRA=""
 if [ -n "$PIN_APP" ]; then
@@ -110,9 +131,14 @@ UCL_INFRA_FQDN=$(fqdn "$INFRA")
 EOF
 ok "wrote $HOSTS_ENV"
 
-# --- start the infra shim on the experiment box (loopback only) ---
-info "Starting infra shim on $INFRA ..."
-ssh "${SSH_OPTS[@]}" "$INFRA" "bash -lc 'INFRA_SHIM_HOST=127.0.0.1 bash $PROJ/ucl-infra/start-infra-shim.sh'" || warn "shim start reported an error (may already be up)"
+# --- experiment infra: ON-DEMAND GPU broker (no static shim) ---
+# We no longer start an always-on static shim that holds a GPU for the
+# deployment's whole life. Instead the app runs with GPU_BROKER=1: the engine
+# claims a free GPU and stands up a per-experiment shim only WHEN an experiment
+# runs (gpu_broker.claim, ucl-infra/claim-gpu.sh), releasing it after. So there
+# is nothing to start here — the broker scripts already live on every box at
+# $PROJ/ucl-infra. GPU_BROKER is exported into the app's start below.
+info "Experiment infra: on-demand GPU broker (GPU_BROKER=1) — no static shim."
 
 # --- start the Ollama wake-proxy (local LLM only) on the app box ---
 # We start the lazy wake-on-request PROXY, not Ollama itself: it cold-starts
@@ -149,8 +175,8 @@ case "$REPO" in
 esac
 info "App port for $REPO = $APP_PORT"
 
-info "Starting app on $APP ..."
-APP_OUT=$(ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'export PATH=\$HOME/.local/bin:\$PATH XDG_CACHE_HOME=$PROJ/.cache UV_CACHE_DIR=$PROJ/.uv-cache PORT=$APP_PORT; cd $REPO; bash start.sh start'" 2>&1) || true
+info "Starting app on $APP (GPU_BROKER=1, on-demand experiment GPUs) ..."
+APP_OUT=$(ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'export PATH=\$HOME/.local/bin:\$PATH XDG_CACHE_HOME=$PROJ/.cache UV_CACHE_DIR=$PROJ/.uv-cache PORT=$APP_PORT GPU_BROKER=1 UCL_INFRA_DIR=$PROJ/ucl-infra; cd $REPO; bash start.sh start'" 2>&1) || true
 if printf '%s' "$APP_OUT" | grep -qiE 'Backend ready|already in use|already running'; then
   ok "app up on $APP"
 else
@@ -158,20 +184,12 @@ else
   die "app failed to start on $APP"
 fi
 
-# --- point the app at the shim, and wire the tunnel only when split ---
-# Split  : app reaches shim via tunnel  127.0.0.1:8771 -> <infra>:8770
-# Single : app reaches shim directly at 127.0.0.1:8770 (same box, no tunnel)
-if [ "$APP" != "$INFRA" ]; then
-  info "Wiring app->infra tunnel ($APP :8771 -> $INFRA :8770) ..."
-  ssh "${SSH_OPTS[@]}" "$APP" "bash -lc 'UCL_INFRA_FQDN=$(fqdn "$INFRA") bash $PROJ/ucl-infra/start-tunnel-to-infra.sh'" || warn "infra tunnel reported an error"
-  INFRA_URL="http://127.0.0.1:8771"
-else
-  INFRA_URL="http://127.0.0.1:8770"
-fi
-# Apply the right INFRA_SERVER_URL to the running app. Done from the Mac after
-# the tunnel is reloaded (below) so we hit the app via localhost:8000 — avoids
-# nested-quote hell over ssh. Deferred until after the LaunchAgent reload.
-SHIM_KEY=$(ssh "${SSH_OPTS[@]}" "$INFRA" "bash -lc 'cat $PROJ/ucl-infra/session_key'" 2>/dev/null | tr -d '[:space:]')
+# --- no static-shim wiring: the broker handles experiment infra per-run ---
+# With GPU_BROKER=1 the app does NOT use a deployment-wide INFRA_SERVER_URL — the
+# engine claims a GPU and gets a per-run shim URL/key from gpu_broker.env_for()
+# at submit time. So there's no static :8770/:8771 shim to start, no app->infra
+# tunnel to wire, and no INFRA_SERVER_URL to POST. (The broker opens its own
+# short-lived tunnel per lease via claim-gpu.sh.)
 
 # --- reload the Mac->app LaunchAgent so localhost:8000 points at the new box ---
 PLIST="$HOME/Library/LaunchAgents/${LAUNCH_LABEL}.plist"
@@ -192,8 +210,4 @@ if ! $REACHED; then
   warn "app not reachable yet via localhost:$APP_PORT — tunnel still settling; check launchctl + 'curl localhost:$APP_PORT'"
   exit 0
 fi
-info "Pointing app at shim: $INFRA_URL"
-curl -fsS -m10 -X POST "http://localhost:$APP_PORT/api/env" -H "Content-Type: application/json" \
-  -d "{\"INFRA_SERVER_URL\":\"$INFRA_URL\",\"INFRA_SESSION_KEY\":\"$SHIM_KEY\"}" >/dev/null 2>&1 \
-  && ok "infra wired ($INFRA_URL)" || warn "could not set INFRA_SERVER_URL — set it in the UI if Stage 6 fails"
-ok "app reachable at http://localhost:$APP_PORT  (app=$APP infra=$INFRA)"
+ok "app reachable at http://localhost:$APP_PORT  (app=$APP, experiment GPUs on-demand via broker)"
