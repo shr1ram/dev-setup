@@ -39,6 +39,11 @@ free_count=0
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
+# My username on the boxes (from the resolved ssh config, so nothing is
+# hardcoded here) — rows where I hold GPU memory are highlighted blue.
+first_host=$(echo "$all_hosts" | head -1)
+ME=$(ssh -G "$first_host" 2>/dev/null | awk '$1=="user"{print $2}')
+
 # Remote one-liner: emit "user used_mib" per GPU compute process. ps runs on the
 # box (PIDs are remote); username comes straight from ps -o user= (already
 # trimmed). Run under bash -lc — the login shell on these hosts is csh, which
@@ -53,18 +58,27 @@ for host in $all_hosts; do
             echo "UP" > "$tmpdir/${host}.status" && \
             echo "$output" > "$tmpdir/${host}.output" || \
             echo "DOWN" > "$tmpdir/${host}.status"
-        # Top GPU user (best-effort; empty/"—" when idle or unreadable).
+        # Per-user GPU memory ("user mib" lines; empty when idle or unreadable).
         ssh -o RemoteCommand=none -o ConnectTimeout="$TIMEOUT" -o BatchMode=yes "$host" \
             bash -lc "'$TOPUSER_REMOTE'" 2>/dev/null \
-            | awk '{ s[$1]+=$2; tot+=$2 } END { if(tot<=0) exit; b="";bv=0; for(u in s) if(s[u]>bv){bv=s[u];b=u}; printf "%s (%d%%)\n", b, (bv*100/tot) }' \
-            > "$tmpdir/${host}.topuser" 2>/dev/null || true
+            > "$tmpdir/${host}.users" 2>/dev/null || true
     ) &
 done
 
 wait
 
-# Helper: read the precomputed top-user string for a host ("—" if none).
-top_user() { local f="$tmpdir/${1}.topuser"; [ -s "$f" ] && cat "$f" || echo "—"; }
+# Helpers over the per-host "user mib" lines.
+top_user() {
+    local f="$tmpdir/${1}.users"
+    [ -s "$f" ] || { echo "—"; return; }
+    awk '{ s[$1]+=$2; tot+=$2 } END { if(tot<=0) { print "—"; exit }; b="";bv=0; for(u in s) if(s[u]>bv){bv=s[u];b=u}; printf "%s (%d%%)\n", b, (bv*100/tot) }' "$f"
+}
+# Sum of MY memory on the host (empty string if none) — drives the blue highlight.
+my_mem() {
+    local f="$tmpdir/${1}.users"
+    [ -n "$ME" ] && [ -s "$f" ] || return 0
+    awk -v me="$ME" '$1==me { s+=$2 } END { if(s>0) printf "%d MiB", s }' "$f"
+}
 
 # --- Single-GPU lab machines ---
 printf "%-20s %-6s %-10s %-22s %-26s %s\n" "MACHINE" "STATUS" "GPU UTIL" "MEMORY" "GPU MODEL" "TOP USER"
@@ -91,9 +105,19 @@ for host in $lab_hosts; do
             mem_pct=$((mem_used_num * 100 / mem_total_num))
         fi
         tuser=$(top_user "$host")
+        mymem=$(my_mem "$host")
+        free_tag=""
         if [[ "$util_num" -lt 10 && "$mem_pct" -lt 10 ]] 2>/dev/null; then
-            printf "\033[1;32m%-20s %-6s %-10s %-22s %-26s %s  *** FREE ***\033[0m\n" "$name" "UP" "$gpu_util" "${mem_used} / ${mem_total}" "$gpu_name" "$tuser"
+            free_tag="  *** FREE ***"
             ((free_count++)) || true
+        fi
+        if [[ -n "$mymem" ]]; then
+            # I'm on this box: blue row; name me explicitly if someone else is top.
+            you_tag="  << you"
+            [[ "${tuser%% *}" != "$ME" ]] && you_tag="  << you: $mymem"
+            printf "\033[1;34m%-20s %-6s %-10s %-22s %-26s %s%s%s\033[0m\n" "$name" "UP" "$gpu_util" "${mem_used} / ${mem_total}" "$gpu_name" "$tuser" "$you_tag" "$free_tag"
+        elif [[ -n "$free_tag" ]]; then
+            printf "\033[1;32m%-20s %-6s %-10s %-22s %-26s %s%s\033[0m\n" "$name" "UP" "$gpu_util" "${mem_used} / ${mem_total}" "$gpu_name" "$tuser" "$free_tag"
         else
             printf "%-20s %-6s %-10s %-22s %-26s %s\n" "$name" "UP" "$gpu_util" "${mem_used} / ${mem_total}" "$gpu_name" "$tuser"
         fi
@@ -155,7 +179,12 @@ if [[ -n "$url_hosts" ]]; then
             # Host-level top GPU user (multi-GPU: process->GPU attribution isn't
             # reliable from the query, so this is the busiest user across the box).
             tuser=$(top_user "$host")
-            printf "%-20s        \033[1;36m%d/%d GPUs free\033[0m   top user: %s\n" "" "$host_free" "$host_total_gpus" "$tuser"
+            mymem=$(my_mem "$host")
+            if [[ -n "$mymem" ]]; then
+                printf "%-20s        \033[1;36m%d/%d GPUs free\033[0m   top user: %s   \033[1;34m<< you: %s\033[0m\n" "" "$host_free" "$host_total_gpus" "$tuser" "$mymem"
+            else
+                printf "%-20s        \033[1;36m%d/%d GPUs free\033[0m   top user: %s\n" "" "$host_free" "$host_total_gpus" "$tuser"
+            fi
         else
             printf "%-20s %-6s\n" "$name" "DOWN"
             ((down_count++)) || true
