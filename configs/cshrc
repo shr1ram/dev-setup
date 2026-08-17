@@ -19,4 +19,5 @@ endif
 # Aliases
 alias crc 'tmux new-session -s claude`date +%s` \; set destroy-unattached on \; send-keys "claude --remote-control" Enter'
 alias gpu-status '~/dev-setup/scripts/gpu-status.sh'
+alias gpu-server-health '~/dev-setup/scripts/gpu-server-health.sh'
 alias cpu-status '~/dev-setup/scripts/cpu-status.sh'
