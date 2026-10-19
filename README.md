@@ -51,7 +51,7 @@ curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh | bas
 4. Generates SSH key if needed
 5. Authenticates with GitHub and clones the **private** repo for SSH config (`~/.ssh/config`)
 
-No Orbital tooling is installed unless you pass `--orbital`.
+No Orbital tooling is installed unless you pass `--orbital` (or `--only orbital`).
 
 ### Full (`--full`)
 Everything in minimal, plus:

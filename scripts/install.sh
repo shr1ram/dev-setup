@@ -437,8 +437,10 @@ setup_claude() {
 # ─── Private repo ───────────────────────────────────────────────────────────
 setup_private() {
     if [[ "$SKIP_PRIVATE" == true ]]; then
-        [[ "$ORBITAL" == true ]] && warn "--orbital ignored: Orbital tooling lives in the private repo (--skip-private)"
-        return
+        if [[ "$ORBITAL" == true ]]; then
+            warn "--orbital ignored: Orbital tooling lives in the private repo (--skip-private)"
+        fi
+        return 0
     fi
 
     prompt_header "Private Config Setup"
@@ -449,10 +451,15 @@ setup_private() {
         return
     fi
 
+    # Flags passed through to the private setup
+    local private_args=()
+    [[ "$SKIP_SSH" == true ]] && private_args+=("--skip-ssh")
+    [[ "$ORBITAL" == true ]] && private_args+=("--orbital")
+
     info "Cloning private config repo..."
     if [[ "$DRY_RUN" == true ]]; then
         info "[DRY RUN] Would clone/update $PRIVATE_REPO_URL -> $PRIVATE_CLONE_DIR"
-        info "[DRY RUN] Would run setup-private.sh"
+        info "[DRY RUN] Would run setup-private.sh ${private_args[*]+"${private_args[*]}"}"
         return
     fi
 
@@ -465,12 +472,6 @@ setup_private() {
             return
         fi
     fi
-
-    # Run private setup, passing through relevant flags
-    local private_args=()
-    [[ "$SKIP_SSH" == true ]] && private_args+=("--skip-ssh")
-    [[ "$ORBITAL" == true ]] && private_args+=("--orbital")
-    [[ "$DRY_RUN" == true ]] && private_args+=("--dry-run")
 
     bash "$PRIVATE_CLONE_DIR/setup-private.sh" "${private_args[@]+"${private_args[@]}"}"
 }
