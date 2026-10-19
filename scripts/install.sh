@@ -31,6 +31,7 @@ PRIVATE_CLONE_DIR="$HOME/dev-setup-private"
 # Defaults — minimal mode (configs only)
 FULL=false
 SKIP_SSH=false
+SKIP_SSH_KEY=false   # public key generation; separate so --only private doesn't create keys
 SKIP_CLAUDE=false
 SKIP_TMUX=false
 SKIP_TAILSCALE=false
@@ -88,11 +89,11 @@ done
 # If --only is set, skip everything except that module (implies --full)
 if [[ -n "$ONLY_MODULE" ]]; then
     FULL=true
-    SKIP_SSH=true; SKIP_CLAUDE=true; SKIP_TMUX=true
+    SKIP_SSH=true; SKIP_SSH_KEY=true; SKIP_CLAUDE=true; SKIP_TMUX=true
     SKIP_TAILSCALE=true; SKIP_BREW=true; SKIP_SHELL=true; SKIP_GIT=true
     SKIP_PRIVATE=true
     case "$ONLY_MODULE" in
-        ssh)       SKIP_SSH=false; SKIP_PRIVATE=false; ORBITAL=false ;;
+        ssh)       SKIP_SSH=false; SKIP_SSH_KEY=false; SKIP_PRIVATE=false; ORBITAL=false ;;
         claude)    SKIP_CLAUDE=false; SKIP_SHELL=false ;;  # claude needs nvm/node from shell setup
         tmux)      SKIP_TMUX=false ;;
         tailscale) SKIP_TAILSCALE=false ;;
@@ -303,7 +304,7 @@ setup_shell() {
 
 # ─── SSH key generation ─────────────────────────────────────────────────────
 setup_ssh_key() {
-    if [[ "$SKIP_SSH" == true ]]; then return; fi
+    if [[ "$SKIP_SSH" == true || "$SKIP_SSH_KEY" == true ]]; then return; fi
     info "Checking SSH key..."
 
     if [[ -f "$HOME/.ssh/id_ed25519" ]]; then

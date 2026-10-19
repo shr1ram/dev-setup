@@ -80,14 +80,21 @@ Existing files are backed up before overwriting (max 3 kept per file). Running a
 
 Work-specific tooling for Orbital lives in the **private** repo under `orbital/`. It is **off by default**. The private repo itself (SSH config) still runs by default.
 
-| Machine | Command |
-|---|---|
-| Any machine (default: public + private, no Orbital) | `curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh \| bash` |
-| Work Mac (also Orbital) | `… \| bash -s -- --orbital` |
-| No private repo at all (no GitHub auth, no SSH hosts, no Orbital) | `… \| bash -s -- --skip-private` |
-| Add only the Orbital bits to an existing setup | `~/dev-setup/setup.sh --only orbital` |
+```bash
+# Any machine (default): public + private (SSH config), no Orbital
+curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh | bash
 
-The Orbital step is macOS-only and only symlinks `~/.local/bin/gpu-login` to the private repo's copy. It installs nothing system-wide, so leaving out `--orbital` leaves no trace. `--orbital` has no effect with `--skip-private`. Usage docs are in the private repo at `orbital/README.md`.
+# Work Mac: also install the Orbital tooling
+curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh | bash -s -- --orbital
+
+# No private repo at all (no GitHub auth, no SSH hosts, no Orbital)
+curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh | bash -s -- --skip-private
+
+# Add only the Orbital tooling to an already set-up machine
+~/dev-setup/setup.sh --only orbital
+```
+
+The Orbital step is macOS-only and only symlinks `~/.local/bin/gpu-login` to the private repo's copy; it installs nothing system-wide. Leaving out `--orbital` means it isn't installed, but it doesn't remove a link from an earlier run (`rm ~/.local/bin/gpu-login` does). `--orbital` has no effect with `--skip-private`. Usage docs are in the private repo at `orbital/README.md`.
 
 ## Updating Configs
 
