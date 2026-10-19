@@ -18,7 +18,7 @@ set -euo pipefail
 #   --skip-shell      Skip shell (zsh) config setup
 #   --skip-git        Skip git config setup
 #   --skip-private    Skip private repo setup entirely
-#   --skip-orbital    Skip Orbital work tooling (passed to private repo)
+#   --orbital         Also install Orbital work tooling (off by default; private repo)
 #   --only <module>   Run only the specified module
 #   --dry-run         Show what would be done without making changes
 #   -h, --help        Show this help message
@@ -38,7 +38,7 @@ SKIP_BREW=false
 SKIP_SHELL=false
 SKIP_GIT=false
 SKIP_PRIVATE=false
-SKIP_ORBITAL=false
+ORBITAL=false
 DRY_RUN=false
 ONLY_MODULE=""
 
@@ -73,7 +73,7 @@ while [[ $# -gt 0 ]]; do
         --skip-shell)     SKIP_SHELL=true ;;
         --skip-git)       SKIP_GIT=true ;;
         --skip-private)   SKIP_PRIVATE=true ;;
-        --skip-orbital)   SKIP_ORBITAL=true ;;
+        --orbital)        ORBITAL=true ;;
         --only)
             ONLY_MODULE="$2"
             shift
@@ -90,17 +90,17 @@ if [[ -n "$ONLY_MODULE" ]]; then
     FULL=true
     SKIP_SSH=true; SKIP_CLAUDE=true; SKIP_TMUX=true
     SKIP_TAILSCALE=true; SKIP_BREW=true; SKIP_SHELL=true; SKIP_GIT=true
-    SKIP_PRIVATE=true; SKIP_ORBITAL=true
+    SKIP_PRIVATE=true
     case "$ONLY_MODULE" in
-        ssh)       SKIP_SSH=false; SKIP_PRIVATE=false ;;
+        ssh)       SKIP_SSH=false; SKIP_PRIVATE=false; ORBITAL=false ;;
         claude)    SKIP_CLAUDE=false; SKIP_SHELL=false ;;  # claude needs nvm/node from shell setup
         tmux)      SKIP_TMUX=false ;;
         tailscale) SKIP_TAILSCALE=false ;;
         brew)      SKIP_BREW=false ;;
         shell)     SKIP_SHELL=false ;;
         git)       SKIP_GIT=false ;;
-        private)   SKIP_PRIVATE=false; SKIP_SSH=false; SKIP_ORBITAL=false ;;
-        orbital)   SKIP_ORBITAL=false; SKIP_PRIVATE=false ;;  # lives in the private repo
+        private)   SKIP_PRIVATE=false; SKIP_SSH=false ;;  # + Orbital only if --orbital
+        orbital)   ORBITAL=true; SKIP_PRIVATE=false ;;  # lives in the private repo
         *) error "Unknown module: $ONLY_MODULE"; exit 1 ;;
     esac
 fi
@@ -435,7 +435,10 @@ setup_claude() {
 
 # ─── Private repo ───────────────────────────────────────────────────────────
 setup_private() {
-    if [[ "$SKIP_PRIVATE" == true ]]; then return; fi
+    if [[ "$SKIP_PRIVATE" == true ]]; then
+        [[ "$ORBITAL" == true ]] && warn "--orbital ignored: Orbital tooling lives in the private repo (--skip-private)"
+        return
+    fi
 
     prompt_header "Private Config Setup"
 
@@ -465,7 +468,7 @@ setup_private() {
     # Run private setup, passing through relevant flags
     local private_args=()
     [[ "$SKIP_SSH" == true ]] && private_args+=("--skip-ssh")
-    [[ "$SKIP_ORBITAL" == true ]] && private_args+=("--skip-orbital")
+    [[ "$ORBITAL" == true ]] && private_args+=("--orbital")
     [[ "$DRY_RUN" == true ]] && private_args+=("--dry-run")
 
     bash "$PRIVATE_CLONE_DIR/setup-private.sh" "${private_args[@]+"${private_args[@]}"}"

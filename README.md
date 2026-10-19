@@ -53,7 +53,7 @@ Existing files are backed up before overwriting (max 3 kept per file). Running a
 | `gh`       | GitHub CLI (standalone binary)                  | public  | minimal |
 | `claude`   | Claude Code install + settings, hooks, permissions | public  | minimal |
 | `ssh`      | SSH config (hosts, keys)                        | private | minimal |
-| `orbital`  | Orbital work tooling (`gpu-login` on PATH, macOS) | private | minimal |
+| `orbital`  | Orbital work tooling (`gpu-login` on PATH, macOS) | private | opt-in (`--orbital`) |
 | `brew`     | Installs Homebrew + packages from Brewfile      | public  | full    |
 | `shell`    | + pyenv install                                 | public  | full    |
 | `tailscale`| Tailscale VPN                                   | public  | full    |
@@ -69,8 +69,8 @@ Existing files are backed up before overwriting (max 3 kept per file). Running a
 ./setup.sh --skip-brew         # Skip Homebrew packages
 ./setup.sh --skip-shell        # Skip zsh/bash/csh config
 ./setup.sh --skip-git          # Skip git config
-./setup.sh --skip-private      # Skip private repo entirely (no SSH config, no Orbital tooling)
-./setup.sh --skip-orbital      # Skip Orbital work tooling only
+./setup.sh --skip-private      # Skip private repo entirely (no SSH config)
+./setup.sh --orbital           # Also install Orbital work tooling (off by default)
 ./setup.sh --only tmux         # Only set up tmux
 ./setup.sh --only orbital      # Only set up the Orbital work tooling
 ./setup.sh --dry-run           # Preview without making changes
@@ -78,16 +78,16 @@ Existing files are backed up before overwriting (max 3 kept per file). Running a
 
 ## With or without Orbital work tooling
 
-Work-specific tooling for Orbital lives in the **private** repo under `orbital/`. The general setup works fine without it.
+Work-specific tooling for Orbital lives in the **private** repo under `orbital/`. It is **off by default**. The private repo itself (SSH config) still runs by default.
 
 | Machine | Command |
 |---|---|
-| Work Mac (everything) | `curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh \| bash` |
-| Personal / non-Orbital machine | `… \| bash -s -- --skip-orbital` |
+| Any machine (default: public + private, no Orbital) | `curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh \| bash` |
+| Work Mac (also Orbital) | `… \| bash -s -- --orbital` |
 | No private repo at all (no GitHub auth, no SSH hosts, no Orbital) | `… \| bash -s -- --skip-private` |
 | Add only the Orbital bits to an existing setup | `~/dev-setup/setup.sh --only orbital` |
 
-The Orbital step is macOS-only and only symlinks `~/.local/bin/gpu-login` to the private repo's copy. It installs nothing system-wide, so `--skip-orbital` leaves no trace. Usage docs are in the private repo at `orbital/README.md`.
+The Orbital step is macOS-only and only symlinks `~/.local/bin/gpu-login` to the private repo's copy. It installs nothing system-wide, so leaving out `--orbital` leaves no trace. `--orbital` has no effect with `--skip-private`. Usage docs are in the private repo at `orbital/README.md`.
 
 ## Updating Configs
 
