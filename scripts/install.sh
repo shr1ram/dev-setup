@@ -432,6 +432,27 @@ setup_claude() {
     # Always copy settings
     mkdir -p "$HOME/.claude"
     install_config "$CLONE_DIR/configs/claude_settings.json" "$HOME/.claude/settings.json"
+
+    # Skills: symlink each skills/<name> into ~/.claude/skills (the repo copy is the source of truth)
+    mkdir -p "$HOME/.claude/skills"
+    for skill in "$CLONE_DIR"/skills/*/; do
+        [[ -f "$skill/SKILL.md" ]] || continue
+        local name dest
+        name="$(basename "$skill")"; dest="$HOME/.claude/skills/$name"
+        if [[ -L "$dest" && "$(readlink "$dest")" == "${skill%/}" ]]; then
+            ok "Skill $name already linked"
+        elif [[ "$DRY_RUN" == true ]]; then
+            info "[DRY RUN] Would link $dest -> ${skill%/}"
+        else
+            if [[ -e "$dest" && ! -L "$dest" ]]; then
+                mv "$dest" "$dest.backup.$(date +%Y%m%d_%H%M%S)"
+                warn "Moved existing $dest aside"
+            fi
+            ln -sfn "${skill%/}" "$dest"
+            ok "Linked skill $name"
+        fi
+    done
+    # Per-skill dependencies (e.g. skills/explainer-video/scripts/setup.sh) are run on demand by the skill.
 }
 
 # ─── Private repo ───────────────────────────────────────────────────────────

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: compound-interest-3b1b
+expected_outcome: |
+  A final.mp4 of roughly 45-90 seconds exists, 1920x1080, with narration audio and animated
+  Manim visuals in the dark 3b1b style that change in sync with the narration (a growth curve or
+  doubling visual appears when it is discussed). No block has a long frozen stretch.

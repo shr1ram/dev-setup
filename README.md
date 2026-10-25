@@ -72,7 +72,7 @@ Existing files are backed up before overwriting (max 3 kept per file). Running a
 | `shell`    | Zsh, Bash, and tcsh/csh config + nvm + Node.js  | public  | minimal |
 | `tmux`     | tmux install + config + TPM                     | public  | minimal |
 | `gh`       | GitHub CLI (standalone binary)                  | public  | minimal |
-| `claude`   | Claude Code install + settings, hooks, permissions | public  | minimal |
+| `claude`   | Claude Code install + settings, hooks, permissions, skills | public  | minimal |
 | `ssh`      | SSH config (hosts, keys)                        | private | minimal |
 | `orbital`  | Orbital work tooling (`gpu-login` on PATH, macOS) | private | opt-in (`--orbital`) |
 | `brew`     | Installs Homebrew + packages from Brewfile      | public  | full    |
@@ -120,6 +120,14 @@ curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh | bas
 
 The Orbital step is macOS-only and only symlinks `~/.local/bin/gpu-login` to the private repo's copy; it installs nothing system-wide. Leaving out `--orbital` means it isn't installed, but it doesn't remove a link from an earlier run (`rm ~/.local/bin/gpu-login` does). `--orbital` has no effect with `--skip-private`. Usage docs are in the private repo at `orbital/README.md`.
 
+## Skills
+
+`skills/<name>/` holds Claude Code skills; `setup.sh` symlinks each one into `~/.claude/skills/`.
+The `explainer-video` skill makes narrated, animated explainer videos entirely locally. Its Python
+environment and model weights are not in git: the first run of the skill (or
+`skills/explainer-video/scripts/setup.sh`) installs them into the skill folder. On macOS it also
+needs Homebrew (`ffmpeg`, `ffmpeg-full`, `cairo`, `pango`, `espeak-ng`) and BasicTeX for equations.
+
 ## Updating Configs
 
 Configs in this repo are the source of truth. Don't edit live files (`~/.zshrc`, `~/.bashrc`, `~/.cshrc`, etc.) directly — edit the source in `configs/`, commit, push, and re-run `setup.sh`.
@@ -140,5 +148,12 @@ dev-setup/
 │   ├── cshrc                 # tcsh/csh config (lab machines)
 │   ├── tmux.conf             # tmux config
 │   └── claude_settings.json  # Claude Code settings + permissions
+├── skills/                   # Claude Code skills, symlinked into ~/.claude/skills by setup.sh
+│   └── explainer-video/      # Local explainer-video pipeline (Manim + Kokoro + ffmpeg)
+│       ├── SKILL.md          # Workflow Claude follows
+│       ├── scripts/          # tts.py, render.py, assemble.py, sheet.py, setup.sh
+│       ├── references/       # Styles, Manim patterns, script format, worked example
+│       ├── .venv/, models/   # Python env + model weights (gitignored; scripts/setup.sh rebuilds)
+│       └── videos/           # Generated video projects (gitignored)
 └── README.md
 ```
