@@ -6,7 +6,8 @@ Writes  <project>/audio/<id>.wav   (24 kHz mono)
         <project>/timings.json     durations + word timestamps per block
 
 Usage:  tts.py PROJECT_DIR [--blocks 01,03] [--voice af_heart] [--speed 1.0]
-Re-running only regenerates the blocks you ask for (or whose narration changed).
+Re-running regenerates only blocks whose narration, voice, speed or lang changed (or that have no
+audio yet). --blocks forces those blocks to regenerate too; --force regenerates everything.
 """
 import sys as _s, os as _o; _s.path.insert(0, _o.path.dirname(_o.path.abspath(__file__))); import _bootstrap  # noqa: E402
 import argparse, hashlib, json, os, re, sys, warnings
@@ -29,7 +30,7 @@ def norm_text(s: str) -> str:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("project")
-    ap.add_argument("--blocks", help="comma-separated block ids to (re)generate")
+    ap.add_argument("--blocks", help="comma-separated block ids to regenerate even if unchanged")
     ap.add_argument("--voice")
     ap.add_argument("--speed", type=float)
     ap.add_argument("--force", action="store_true", help="regenerate even if narration unchanged")
@@ -46,22 +47,23 @@ def main():
     old = {b["id"]: b for b in json.loads(tpath.read_text())["blocks"]} if tpath.exists() else {}
     want = set(a.blocks.split(",")) if a.blocks else None
 
-    from kokoro import KPipeline
-    pipe = KPipeline(lang_code=lang, repo_id="hexgrad/Kokoro-82M")
+    pipe = None  # loaded on first use, so an all-cached re-run never loads the model
 
     out = []
     for b in script["blocks"]:
         bid, text = b["id"], norm_text(b["narration"])
-        key = f"{voice}|{speed}|{text}" + (f"|{lang}" if lang != "a" else "")
-        digest = hashlib.sha1(key.encode()).hexdigest()[:12]
+        digest = hashlib.sha1(f"{voice}|{speed}|{lang}|{text}".encode()).hexdigest()[:12]
         prev = old.get(bid)
-        reuse = (prev and prev.get("hash") == digest and (proj / prev["audio"]).exists()
-                 and not a.force and (want is None or bid not in want))
-        if reuse:
+        # Stale audio is never kept, listed or not: scenes are timed against these word timestamps.
+        fresh = prev and prev.get("hash") == digest and (proj / prev["audio"]).exists()
+        if fresh and not a.force and (want is None or bid not in want):
             out.append(prev); continue
-        if want is not None and bid not in want and prev:
-            out.append(prev); continue
+        if want is not None and bid not in want and not fresh:
+            print(f"  block {bid}: not in --blocks but {'its narration/voice changed' if prev else 'it has no audio'}; regenerating")
 
+        if pipe is None:
+            from kokoro import KPipeline
+            pipe = KPipeline(lang_code=lang, repo_id="hexgrad/Kokoro-82M")
         chunks, words, offset = [], [], PAD_HEAD
         for r in pipe(text, voice=voice, speed=speed, split_pattern=r"\n+"):
             audio = r.audio.numpy() if hasattr(r.audio, "numpy") else np.asarray(r.audio)
@@ -78,7 +80,7 @@ def main():
         dur = round(len(audio) / SR, 3)
         out.append({"id": bid, "audio": rel, "duration": dur, "words": words, "hash": digest})
 
-    tpath.write_text(json.dumps({"voice": voice, "speed": speed, "blocks": out}, indent=1))
+    tpath.write_text(json.dumps({"voice": voice, "speed": speed, "lang": lang, "blocks": out}, indent=1))
 
     total = 0.0
     print(f"{'block':<6}{'secs':>7}{'words':>7}{'w/s':>6}  note")

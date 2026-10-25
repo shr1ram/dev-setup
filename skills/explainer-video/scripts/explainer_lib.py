@@ -5,7 +5,7 @@ Import in scenes.py:   from explainer_lib import *
 (render.py puts this directory on PYTHONPATH.)
 
 Everything here exists so a scene can be written in terms of the narration:
-    self.at("compound interest", Write(title))   # fire when those words are spoken
+    self.at("Here's a question", Write(title))   # fire when those words are spoken
     self.finish()                                # hold until the narration ends
 Attributes: self.theme, self.narration, self.narration_duration, self.words, self.now
 """
@@ -116,12 +116,23 @@ def _strip(w: str) -> str:
     return re.sub(r"[^\w']", "", w.lower())
 
 
+def _find(names: list[str], target: list[str], occurrence: int) -> int | None:
+    """Index where `target` starts for the `occurrence`-th time in `names`, or None."""
+    seen = 0
+    for k in range(len(names) - len(target) + 1):
+        if names[k:k + len(target)] == target:
+            seen += 1
+            if seen == occurrence:
+                return k
+    return None
+
+
 # --------------------------------------------------------------------------- base scene
 
 class _ExplainerMixin:
     """Loads this block's narration timings and theme. Mixed into Scene variants below."""
 
-    block: str | None = None      # e.g. "01". Defaults to digits in the class name.
+    block: str | None = None      # e.g. "01". Defaults to the digits after "Block" in the class name.
     theme_name: str | None = None  # override the script's style for one scene
 
     # ---- lifecycle
@@ -140,7 +151,8 @@ class _ExplainerMixin:
         tpath = project / "timings.json"
         if tpath.exists():
             timings = {b["id"]: b for b in json.loads(tpath.read_text())["blocks"]}
-        bid = self.block or "".join(ch for ch in type(self).__name__ if ch.isdigit())
+        m = re.match(r"Block(\d+)", type(self).__name__)   # same rule as render.py
+        bid = self.block or (m.group(1) if m else "")
         self.block_id = bid
         info = timings.get(bid)
         if info is None:
@@ -165,27 +177,31 @@ class _ExplainerMixin:
 
     def word_time(self, phrase: str, occurrence: int = 1, end: bool = False) -> float:
         """Time (s) when `phrase` starts (or ends) in the narration. Falls back to a
-        proportional estimate if timings are missing, so scenes still render."""
+        proportional estimate if word timings are missing, so scenes still render. A phrase
+        that is not in the narration raises KeyError either way."""
         target = [_strip(w) for w in phrase.split() if _strip(w)]
         if not target:
             raise ValueError(f"phrase {phrase!r} has no words to match")
-        if not self.words:
-            # proportional guess by character position
-            idx = self.narration.lower().find(phrase.lower())
-            frac = (idx / max(1, len(self.narration))) if idx >= 0 else 0.0
-            return frac * self.narration_duration
-        # Kokoro emits punctuation as tokens of its own; match on words only, keeping each word's
-        # index into self.words for its timestamps.
-        toks = [(t, i) for i, w in enumerate(self.words) if (t := _strip(w["w"]))]
-        names = [t for t, _ in toks]
         n = len(target)
-        seen = 0
-        for k in range(len(names) - n + 1):
-            if names[k:k + n] == target:
-                seen += 1
-                if seen == occurrence:
-                    first, last = toks[k][1], toks[k + n - 1][1]
-                    return float(self.words[last]["e"] if end else self.words[first]["s"])
+        if not self.words:
+            # No word timestamps (non-English voice, or tts.py not run yet): match on the narration
+            # text the same way and estimate the time from the word's position.
+            names = [t for w in self.narration.split() if (t := _strip(w))]
+            k = _find(names, target, occurrence)
+            if k is not None:
+                return (k + (n if end else 0)) / max(1, len(names)) * self.narration_duration
+            # Languages written without spaces (Chinese, Japanese): plain substring position.
+            idx = self.narration.lower().find(phrase.lower())
+            if idx >= 0:
+                return (idx + (len(phrase) if end else 0)) / max(1, len(self.narration)) * self.narration_duration
+        else:
+            # Kokoro emits punctuation as tokens of its own; match on words only, keeping each word's
+            # index into self.words for its timestamps.
+            toks = [(t, i) for i, w in enumerate(self.words) if (t := _strip(w["w"]))]
+            k = _find([t for t, _ in toks], target, occurrence)
+            if k is not None:
+                first, last = toks[k][1], toks[k + n - 1][1]
+                return float(self.words[last]["e"] if end else self.words[first]["s"])
         raise KeyError(f"phrase {phrase!r} not found in block {self.block_id} narration: {self.narration!r}")
 
     def at(self, phrase: str, *anims, occurrence: int = 1, lead: float = 0.0, **kw):
@@ -201,8 +217,8 @@ class _ExplainerMixin:
 
     def finish(self, tail: float = 0.6):
         """Hold the last frame until the narration has ended (+tail). Call last."""
-        over = self.now - (self.narration_duration + tail)
-        if over > 0.5:
+        over = self.now - self.narration_duration
+        if over > tail + 0.5:
             print(f"[explainer] WARNING: block {self.block_id}: visuals run {over:.1f}s past the narration "
                   f"({self.now:.1f}s vs {self.narration_duration:.1f}s of speech); trim animations or add narration")
         self.wait_until(self.narration_duration + tail)
@@ -221,7 +237,7 @@ class _ExplainerMixin:
 
     @property
     def safe_bottom(self) -> float:
-        """Lowest y you should place content at; burned subtitles occupy the bottom ~1.2 units."""
+        """Lowest y you should place content at: burned subtitles cover everything below y = -2.3."""
         return -2.3 if self.script.get("subtitles") else -3.6
 
     def caption(self, s: str, size: float = 28) -> Text:
@@ -234,7 +250,8 @@ class _ExplainerMixin:
 
     def counter(self, start: float, end: float, prefix: str = "", suffix: str = "",
                 decimals: int = 0, size: float = 64, color=None):
-        """Returns (group, tracker). Animate with tracker.animate.set_value(end)."""
+        """Returns (group, tracker), with `group.end` = `end`.
+        Animate with tr.animate.set_value(group.end) (or any other value)."""
         tr = ValueTracker(start)
         num = DecimalNumber(start, num_decimal_places=decimals, font_size=size,
                             color=color or self.theme.primary, group_with_commas=True)
@@ -248,6 +265,7 @@ class _ExplainerMixin:
         g = VGroup(*parts).arrange(RIGHT, buff=0.08, aligned_edge=DOWN)
         g.tracker = tr
         g.number = num
+        g.end = end
         return g, tr
 
     def bullets(self, items: list[str], size: float = 34, buff: float = 0.35) -> VGroup:

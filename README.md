@@ -124,12 +124,17 @@ The Orbital step is macOS-only and only symlinks `~/.local/bin/gpu-login` to the
 
 `skills/<name>/` holds Claude Code skills; `setup.sh` symlinks each one into `~/.claude/skills/`.
 The `explainer-video` skill makes narrated, animated explainer videos entirely locally. Its Python
-environment and model weights are not in git: the first run of the skill (or
-`skills/explainer-video/scripts/setup.sh`) installs them into the skill folder. On macOS it also
-needs Homebrew (`ffmpeg`, `ffmpeg-full`, `cairo`, `pango`, `espeak-ng`) and BasicTeX for equations.
-On Linux the system packages must already be installed (`ffmpeg` with libass, `espeak-ng`, cairo/pango
-dev headers, fontconfig, TeX Live, and fonts TeX Gyre Heros + Nunito Sans); `setup.sh` checks them and
-builds the venv. For unattended runs the skill writes `result.json` (see SKILL.md, "Unattended mode").
+environment is not in git: the first run of the skill (or `skills/explainer-video/scripts/setup.sh`)
+builds it inside the skill folder. The Kokoro voice weights (~330 MB) are not part of setup; `tts.py`
+downloads them into the skill folder on its first run. Prerequisites:
+- macOS: Homebrew. The skill's `setup.sh` installs `uv`, `ffmpeg`, `ffmpeg-full`, `cairo`, `pango` and
+  `espeak-ng` with it if missing; BasicTeX (for equations) is optional and installed by hand.
+- Linux: the system packages must already be installed: `uv`, `ffmpeg`, `espeak-ng`, cairo/pango dev
+  headers and fontconfig. The skill's `setup.sh` stops with an error if any of these is missing. ffmpeg
+  with libass (burned subtitles), TeX Live and the fonts TeX Gyre Heros + Nunito Sans are optional:
+  `setup.sh` only reports whether they are present, and the skill falls back without them.
+
+For unattended runs the skill writes `result.json` (see SKILL.md, "Unattended mode").
 
 ## Updating Configs
 
@@ -154,8 +159,10 @@ dev-setup/
 ├── skills/                   # Claude Code skills, symlinked into ~/.claude/skills by setup.sh
 │   └── explainer-video/      # Local explainer-video pipeline (Manim + Kokoro + ffmpeg)
 │       ├── SKILL.md          # Workflow Claude follows
-│       ├── scripts/          # tts.py, render.py, assemble.py, sheet.py, setup.sh
+│       ├── scripts/          # tts.py, render.py, assemble.py, sheet.py, result.py, setup.sh,
+│       │                     #   explainer_lib.py (scene helpers), _bootstrap.py, fonts.py, ffbin.py
 │       ├── references/       # Styles, Manim patterns, script format, worked example
+│       ├── evals/            # Test prompts + graders for the skill
 │       ├── .venv/, models/   # Python env + model weights (gitignored; scripts/setup.sh rebuilds)
 │       └── videos/           # Generated video projects (gitignored)
 └── README.md

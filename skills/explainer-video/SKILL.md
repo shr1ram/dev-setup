@@ -9,7 +9,7 @@ description: |
   a video essay, a faceless YouTube video, or wants to "turn this topic/paper/doc into a video",
   even if they don't say "explainer". Not for editing existing footage, talking-head videos, or
   photoreal AI-generated clips.
-argument-hint: "[topic or source files] [style: 3b1b|welch|econ] [length] [aspect]"
+argument-hint: "[topic or source files] [style: 3b1b|welch|econ|paper] [length] [aspect]"
 allowed-tools: Bash, Read, Write, Edit, WebSearch, WebFetch
 ---
 
@@ -37,7 +37,8 @@ SKILL=~/.claude/skills/explainer-video; bash $SKILL/scripts/setup.sh
 ```
 Run this once at the start: it installs anything missing (on macOS Homebrew libs; on Linux it only
 checks the system packages, which come from the image) plus a uv venv with Manim + Kokoro, and prints
-what is available. Read its last lines: if `latex: MISSING`, use `Text()` instead
+what is available. If it ends with `setup failed: ...` (exit status 1), something required is missing:
+fix that (or tell the user) before going on. Read its last lines: if `latex: MISSING`, use `Text()` instead
 of `MathTex` or ask the user to install BasicTeX. The scripts below re-exec themselves inside that
 venv, so call them with plain `python3` from any shell; `$SKILL` is just shorthand for the path.
 
@@ -60,7 +61,8 @@ reading list) or `EXPLAINER_UNATTENDED=1` is set, nobody is there to answer or w
 ## 1. Settle the brief in one turn
 
 Ask once, listing defaults, and proceed with the defaults if the user says "you choose":
-style (`3b1b` math/CS, `econ` for money/markets/countries, `welch` for physics/ML intuition),
+style (`3b1b` math/CS, `econ` for money/markets/countries, `welch` for physics/ML intuition,
+`paper` for a light whiteboard look),
 length (default 2–3 min), aspect (16:9), voice (`af_heart`), subtitles (off), music (none unless
 they give a file). If the request already settles these, don't ask. Read `references/styles.md`
 for what each style means in practice.
@@ -123,8 +125,9 @@ Mention how to change things cheaply: narration edits only re-run tts + that blo
   too long, so this beat lands after its word; shorten their `run_time`s.
 - `[explainer] WARNING ... visuals run Xs past the narration`: trim animations or add narration.
 - Block video shorter than audio (assembler note): add `self.finish()` or more visuals.
-- `FAIL BlockNN ... timed out after 600s`: the scene hangs (often an updater that never settles, or a
-  huge `wait`); fix it and re-render that block (`--timeout` raises the limit for genuinely long scenes).
+- `FAIL BlockNN ... still rendering after Ns`: either the scene hangs (often an updater that never
+  settles, or a huge `wait`; fix it) or it is a long block at high quality that just needs longer
+  (`--timeout`; defaults are 600 s at `-q l`/`m`, 1800 s at `h`, 3600 s at `k`). Then re-render that block.
 - `[explainer] font 'Helvetica Neue' not installed; using ...`: normal on Linux; the theme's macOS font
   was swapped for the closest installed one (see `scripts/fonts.py`).
 - `explainer-video venv not found`: run `bash $SKILL/scripts/setup.sh`.

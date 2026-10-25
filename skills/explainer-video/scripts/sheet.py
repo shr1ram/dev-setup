@@ -8,16 +8,13 @@ Each tile is stamped with its timestamp. Open the PNG with the Read tool and che
 text cut off at edges, overlapping objects, empty stretches, wrong colours.
 """
 import sys as _s, os as _o; _s.path.insert(0, _o.path.dirname(_o.path.abspath(__file__))); import _bootstrap  # noqa: E402
-import argparse, math, os, shutil, subprocess, tempfile
+import argparse, math, subprocess, tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-# Prefer Homebrew's ffmpeg-full (keg-only) because the plain `ffmpeg` bottle lacks libass
-# (subtitle burn-in) and drawtext.
-_FULL = "/opt/homebrew/opt/ffmpeg-full/bin"
-FFMPEG = f"{_FULL}/ffmpeg" if os.path.exists(f"{_FULL}/ffmpeg") else (shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg")
-FFPROBE = f"{_FULL}/ffprobe" if os.path.exists(f"{_FULL}/ffprobe") else (shutil.which("ffprobe") or "/opt/homebrew/bin/ffprobe")
+from ffbin import FFMPEG, FFPROBE  # prefers Homebrew's ffmpeg-full (libass, drawtext)
+
 
 
 def dur(p):
@@ -34,18 +31,18 @@ def sheet(video, out, every, cols, width=480):
             out_f = Path(td) / f"f{i:04d}.png"
             subprocess.run([FFMPEG, "-y", "-v", "error", "-ss", f"{i*every:.3f}", "-i", str(video),
                             "-frames:v", "1", "-vf", f"scale={width}:-2", str(out_f)], check=True)
-            if out_f.exists(): frames.append(out_f)
+            if out_f.exists(): frames.append((i, out_f))   # keep the seek index for the label
         if not frames:
             print(f"no frames from {video}"); return
-        ims = [Image.open(f).convert("RGB") for f in frames]
-        w, h = ims[0].size
+        ims = [(k, Image.open(f).convert("RGB")) for k, f in frames]
+        w, h = ims[0][1].size
         rows = math.ceil(len(ims) / cols); pad = 6
         canvas = Image.new("RGB", (cols * (w + pad) + pad, rows * (h + pad) + pad), (40, 40, 40))
-        for i, im in enumerate(ims):
+        for i, (k, im) in enumerate(ims):
             x = pad + (i % cols) * (w + pad); y = pad + (i // cols) * (h + pad)
             canvas.paste(im, (x, y))
             dr = ImageDraw.Draw(canvas)
-            label = f"{int(i*every)//60:02d}:{int(i*every)%60:02d}"
+            label = f"{int(k*every)//60:02d}:{int(k*every)%60:02d}"
             dr.rectangle([x, y, x + 58, y + 20], fill=(0, 0, 0))
             dr.text((x + 5, y + 4), label, fill=(255, 255, 255))
         canvas.save(out)

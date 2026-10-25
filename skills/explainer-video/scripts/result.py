@@ -7,12 +7,11 @@ Usage: result.py PROJECT_DIR --status ok
 With --status ok the final video must exist; otherwise the result is recorded as failed.
 Deliberately standard-library only (no venv re-exec), so a failure can always be reported.
 """
-import argparse, json, shutil, subprocess, time
+import argparse, json, subprocess, time
 from fractions import Fraction
 from pathlib import Path
 
-_FULL = "/opt/homebrew/opt/ffmpeg-full/bin/ffprobe"
-FFPROBE = _FULL if Path(_FULL).exists() else (shutil.which("ffprobe") or "ffprobe")
+from ffbin import FFPROBE
 
 
 def probe(path: Path) -> dict:
@@ -21,7 +20,9 @@ def probe(path: Path) -> dict:
     if p.returncode != 0:
         raise RuntimeError(p.stderr.strip()[-500:] or "ffprobe failed")
     j = json.loads(p.stdout)
-    v = next((s for s in j["streams"] if s["codec_type"] == "video"), {})
+    v = next((s for s in j["streams"] if s["codec_type"] == "video"), None)
+    if v is None:
+        raise RuntimeError("no video stream")
     return {"duration_s": round(float(j["format"]["duration"]), 2),
             "resolution": f"{v.get('width')}x{v.get('height')}",
             "fps": float(Fraction(v.get("r_frame_rate", "0/1")))}
@@ -42,10 +43,14 @@ def main():
         script = json.loads((proj / "script.json").read_text())
     except Exception:
         pass
-    res = {"status": a.status, "reason": a.reason, "title": script.get("title", ""),
-           "style": script.get("style", ""), "voice": script.get("voice", ""),
-           "subtitles": bool(script.get("subtitles", False)), "blocks": len(script.get("blocks", [])),
-           "sources": script.get("sources", []), "video": None,
+    if not isinstance(script, dict):
+        script = {}
+    blocks, sources = script.get("blocks"), script.get("sources")
+    res = {"status": a.status, "reason": a.reason, "title": script.get("title") or "",
+           "style": script.get("style") or "", "voice": script.get("voice") or "",
+           "subtitles": bool(script.get("subtitles")),
+           "blocks": len(blocks) if isinstance(blocks, list) else 0,
+           "sources": sources if isinstance(sources, list) else [], "video": None,
            "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     video = proj / a.video
     if a.status == "ok":

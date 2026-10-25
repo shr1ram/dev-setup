@@ -434,22 +434,36 @@ setup_claude() {
     install_config "$CLONE_DIR/configs/claude_settings.json" "$HOME/.claude/settings.json"
 
     # Skills: symlink each skills/<name> into ~/.claude/skills (the repo copy is the source of truth)
-    mkdir -p "$HOME/.claude/skills"
+    local skills_dir="$HOME/.claude/skills" backups="$HOME/.claude/skill-backups"
+    [[ "$DRY_RUN" == true ]] || mkdir -p "$skills_dir"
     for skill in "$CLONE_DIR"/skills/*/; do
         [[ -f "$skill/SKILL.md" ]] || continue
         local name dest
-        name="$(basename "$skill")"; dest="$HOME/.claude/skills/$name"
+        name="$(basename "$skill")"; dest="$skills_dir/$name"
         if [[ -L "$dest" && "$(readlink "$dest")" == "${skill%/}" ]]; then
             ok "Skill $name already linked"
         elif [[ "$DRY_RUN" == true ]]; then
             info "[DRY RUN] Would link $dest -> ${skill%/}"
         else
             if [[ -e "$dest" && ! -L "$dest" ]]; then
-                mv "$dest" "$dest.backup.$(date +%Y%m%d_%H%M%S)"
-                warn "Moved existing $dest aside"
+                # Outside skills/: Claude Code loads every folder there with a SKILL.md as a skill.
+                local backup="$backups/$name.backup.$(date +%Y%m%d_%H%M%S)"
+                mkdir -p "$backups" && mv "$dest" "$backup"
+                warn "Moved existing $dest to $backup"
             fi
             ln -sfn "${skill%/}" "$dest"
             ok "Linked skill $name"
+        fi
+    done
+    # Remove links to skills that were deleted or renamed in the repo.
+    for link in "$skills_dir"/*; do
+        [[ -L "$link" ]] || continue
+        local target; target="$(readlink "$link")"
+        [[ "$target" == "$CLONE_DIR/skills/"* && ! -d "$target" ]] || continue
+        if [[ "$DRY_RUN" == true ]]; then
+            info "[DRY RUN] Would remove stale skill link $link"
+        else
+            rm "$link" && ok "Removed stale skill link $(basename "$link")"
         fi
     done
     # Per-skill dependencies (e.g. skills/explainer-video/scripts/setup.sh) are run on demand by the skill.

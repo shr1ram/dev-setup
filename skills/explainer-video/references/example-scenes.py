@@ -59,11 +59,15 @@ class Block02(ExplainerScene):
 class Block03(ExplainerScene):
     def construct(self):
         t = self.theme
-        ax = Axes(x_range=[0, 30, 5], y_range=[0, 1800, 300], x_length=9.5, y_length=5.2,
+        subs = self.script.get("subtitles")
+        ax = Axes(x_range=[0, 30, 5], y_range=[0, 1800, 300], x_length=9.5, y_length=4.4 if subs else 5.2,
                   axis_config={"color": t.muted, "include_numbers": True, "font_size": 20,
                                "decimal_number_config": {"num_decimal_places": 0}}).shift(DOWN * 0.2 + LEFT * 1.2)
         xl = self.text("years", size=22, color=t.muted).next_to(ax.x_axis, DOWN, buff=0.3)
         yl = self.text("$", size=22, color=t.muted).next_to(ax.y_axis, UP, buff=0.2)
+        # With burned subtitles, lift the whole plot so the tick numbers and "years" clear them.
+        plot = VGroup(ax, xl, yl)
+        plot.shift(UP * max(0.0, self.safe_bottom + 0.1 - plot.get_bottom()[1]))
         self.at("Plot it", Create(ax), FadeIn(xl), FadeIn(yl), run_time=1.5)
 
         simple = ax.plot(lambda x: 100 + 10 * x, x_range=[0, 30], color=t.primary, stroke_width=4)

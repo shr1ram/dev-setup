@@ -9,17 +9,13 @@ Rules: each block is as long as max(video, audio). Short video holds its last fr
 short audio is padded with silence. Nothing is ever sped up or stretched.
 """
 import sys as _s, os as _o; _s.path.insert(0, _o.path.dirname(_o.path.abspath(__file__))); import _bootstrap  # noqa: E402
-import argparse, json, os, re, shutil, subprocess, sys
+import argparse, json, re, shutil, subprocess, sys
 from fractions import Fraction
 from pathlib import Path
 
+from ffbin import FFMPEG, FFPROBE  # prefers Homebrew's ffmpeg-full (libass, drawtext)
 from fonts import resolve_font
 
-# Prefer Homebrew's ffmpeg-full (keg-only) because the plain `ffmpeg` bottle lacks libass
-# (subtitle burn-in) and drawtext.
-_FULL = "/opt/homebrew/opt/ffmpeg-full/bin"
-FFMPEG = f"{_FULL}/ffmpeg" if os.path.exists(f"{_FULL}/ffmpeg") else (shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg")
-FFPROBE = f"{_FULL}/ffprobe" if os.path.exists(f"{_FULL}/ffprobe") else (shutil.which("ffprobe") or "/opt/homebrew/bin/ffprobe")
 
 
 def sh(cmd, cwd=None):
@@ -93,6 +89,8 @@ def main():
     if a.blocks:
         keep = set(a.blocks.split(",")); blocks = [b for b in blocks if b["id"] in keep]
     work = proj / "renders" / "muxed"; work.mkdir(parents=True, exist_ok=True)
+    final = proj / a.out
+    final.unlink(missing_ok=True)   # a failed run must not leave the previous video looking current
 
     muxed, offsets, t = [], [], 0.0
     first = None
@@ -121,7 +119,6 @@ def main():
     joined = work / "joined.mp4"
     sh([FFMPEG, "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(joined)])
 
-    final = proj / a.out
     vf, inputs, fc, maps = [], ["-i", str(joined)], [], []
     soft_srt = None
     if a.subtitles and not has_filter("subtitles"):

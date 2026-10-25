@@ -9,14 +9,14 @@ from explainer_lib import *          # Manim + ExplainerScene + THEMES
 class Block01(ExplainerScene):
     def construct(self):
         t = self.theme
-        title = self.headline("Compound interest")
-        self.at("compound interest", Write(title))              # fires when spoken
+        title = self.headline("A question")
+        self.at("Here's a question", Write(title))              # fires when spoken
         coins = VGroup(*[Circle(0.25, color=t.secondary, fill_opacity=1) for _ in range(10)]).arrange(RIGHT, buff=0.1)
         self.at("one hundred dollars", LaggedStart(*[GrowFromCenter(c) for c in coins], lag_ratio=0.1))
         g, tr = self.counter(100, 110, prefix="$")
         g.next_to(coins, DOWN)
         self.add(g)
-        self.at("ten percent", tr.animate.set_value(110), run_time=1.5)
+        self.at("ten percent", tr.animate.set_value(g.end), run_time=1.5)
         self.finish()                                           # hold until narration ends
 ```
 
@@ -38,7 +38,9 @@ class Block01(ExplainerScene):
 ## Scene types
 - `ExplainerScene` (2D), `ExplainerMovingCameraScene` (zoom/pan with `self.camera.frame`),
   `ExplainerThreeDScene` (`self.set_camera_orientation(phi=70*DEGREES, theta=-45*DEGREES)`).
-- Class name must start with `Block` and contain the block id digits: `Block01`, `Block07`.
+- Class name is `Block` + the block id digits: `Block01`, `Block07`. The id is the digits right after
+  `Block`, so `Block03_alt` is also block 03 and render.py refuses two classes with one id. Classes
+  without digits, like `BlockBase`, are not rendered.
 - One class per block; each renders independently and in parallel, so keep them self-contained.
   To carry an object across blocks, rebuild it at the start of the next block (same position) and
   `self.add()` it before any animation.
@@ -46,7 +48,8 @@ class Block01(ExplainerScene):
 ## Helpers on the scene
 - `self.text(s, size, color, weight)` themed `Text`; `self.headline(s)` top; `self.caption(s)` bottom.
 - `self.highlight(sentence, key)` bold sentence with `key` in primary colour.
-- `self.counter(start, end, prefix, suffix, decimals)` -> `(group, tracker)`.
+- `self.counter(start, end, prefix, suffix, decimals)` -> `(group, tracker)`; animate with
+  `tr.animate.set_value(group.end)` (or any value).
 - `self.bullets([...])` arranged list.
 - `self.theme.primary/secondary/accent/good/bad/muted/text/grid/palette`.
 
@@ -74,7 +77,7 @@ class Block01(ExplainerScene):
   Override per theme with `tex_numbers` in `THEMES`.
 - `always_redraw(lambda: ...)` rebuilds the mobject every frame, so a `.move_to()` applied afterwards is
   lost; put positioning inside the lambda.
-- Burned subtitles cover the bottom ~1.5 scene units (y < -2.3). With `"subtitles": true` in script.json,
+- Burned subtitles cover everything below y = -2.3. With `"subtitles": true` in script.json,
   `self.caption()` moves up automatically and `self.safe_bottom` gives the lowest safe y; keep number
   lines, x-axes and bottom labels above it.
 - Cross-type transforms (`Text` -> `MathTex`, or very different shapes) look like a garbled blob mid-way;
