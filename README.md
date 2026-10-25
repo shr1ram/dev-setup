@@ -72,7 +72,7 @@ Existing files are backed up before overwriting (max 3 kept per file). Running a
 | `shell`    | Zsh, Bash, and tcsh/csh config + nvm + Node.js  | public  | minimal |
 | `tmux`     | tmux install + config + TPM                     | public  | minimal |
 | `gh`       | GitHub CLI (standalone binary)                  | public  | minimal |
-| `claude`   | Claude Code install + settings, hooks, permissions | public  | minimal |
+| `claude`   | Claude Code install + settings, hooks, permissions, skills | public  | minimal |
 | `ssh`      | SSH config (hosts, keys)                        | private | minimal |
 | `orbital`  | Orbital work tooling (`gpu-login` on PATH, macOS) | private | opt-in (`--orbital`) |
 | `brew`     | Installs Homebrew + packages from Brewfile      | public  | full    |
@@ -120,6 +120,22 @@ curl -sL https://raw.githubusercontent.com/shr1ram/dev-setup/main/setup.sh | bas
 
 The Orbital step is macOS-only and only symlinks `~/.local/bin/gpu-login` to the private repo's copy; it installs nothing system-wide. Leaving out `--orbital` means it isn't installed, but it doesn't remove a link from an earlier run (`rm ~/.local/bin/gpu-login` does). `--orbital` has no effect with `--skip-private`. Usage docs are in the private repo at `orbital/README.md`.
 
+## Skills
+
+`skills/<name>/` holds Claude Code skills; `setup.sh` symlinks each one into `~/.claude/skills/`.
+The `explainer-video` skill makes narrated, animated explainer videos entirely locally. Its Python
+environment is not in git: the first run of the skill (or `skills/explainer-video/scripts/setup.sh`)
+builds it inside the skill folder. The Kokoro voice weights (~330 MB) are not part of setup; `tts.py`
+downloads them into the skill folder on its first run. Prerequisites:
+- macOS: Homebrew. The skill's `setup.sh` installs `uv`, `ffmpeg`, `ffmpeg-full`, `cairo`, `pango` and
+  `espeak-ng` with it if missing; BasicTeX (for equations) is optional and installed by hand.
+- Linux: the system packages must already be installed: `uv`, `ffmpeg`, `espeak-ng`, cairo/pango dev
+  headers and fontconfig. The skill's `setup.sh` stops with an error if any of these is missing. ffmpeg
+  with libass (burned subtitles), TeX Live and the fonts TeX Gyre Heros + Nunito Sans are optional:
+  `setup.sh` only reports whether they are present, and the skill falls back without them.
+
+For unattended runs the skill writes `result.json` (see SKILL.md, "Unattended mode").
+
 ## Updating Configs
 
 Configs in this repo are the source of truth. Don't edit live files (`~/.zshrc`, `~/.bashrc`, `~/.cshrc`, etc.) directly — edit the source in `configs/`, commit, push, and re-run `setup.sh`.
@@ -140,5 +156,14 @@ dev-setup/
 │   ├── cshrc                 # tcsh/csh config (lab machines)
 │   ├── tmux.conf             # tmux config
 │   └── claude_settings.json  # Claude Code settings + permissions (Remote Control on for every interactive session)
+├── skills/                   # Claude Code skills, symlinked into ~/.claude/skills by setup.sh
+│   └── explainer-video/      # Local explainer-video pipeline (Manim + Kokoro + ffmpeg)
+│       ├── SKILL.md          # Workflow Claude follows
+│       ├── scripts/          # tts.py, render.py, assemble.py, sheet.py, result.py, setup.sh,
+│       │                     #   explainer_lib.py (scene helpers), _bootstrap.py, fonts.py, ffbin.py
+│       ├── references/       # Styles, Manim patterns, script format, worked example
+│       ├── evals/            # Test prompts + graders for the skill
+│       ├── .venv/, models/   # Python env + model weights (gitignored; scripts/setup.sh rebuilds)
+│       └── videos/           # Generated video projects (gitignored)
 └── README.md
 ```

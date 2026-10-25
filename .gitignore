@@ -3,3 +3,8 @@
 *.swp
 *.swo
 *~
+# explainer-video skill: local environment, model weights, generated videos
+skills/explainer-video/.venv/
+skills/explainer-video/models/
+skills/explainer-video/videos/
+__pycache__/

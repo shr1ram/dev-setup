@@ -1,0 +1,26 @@
+{
+  "title": "Why compound interest grows so fast",
+  "style": "3b1b",
+  "aspect": "16:9",
+  "voice": "af_heart",
+  "speed": 0.9,
+  "lang": "a",
+  "sources": ["Arithmetic: 100 * 1.1^30 = 1744.94"],
+  "blocks": [
+    {
+      "id": "01",
+      "narration": "Here's a question. If you put one hundred dollars in an account that pays ten percent a year, how much do you have after thirty years? Most people guess around four hundred dollars. The real answer is over seventeen hundred.",
+      "visual": "Headline 'A question'. On 'one hundred dollars' a $100 counter appears. On 'ten percent' a '+10% per year' tag. On 'thirty years' a '30 years' tag. On 'four hundred' a muted '$400?' guess. On 'seventeen hundred' the counter runs up to $1,745 in yellow."
+    },
+    {
+      "id": "02",
+      "narration": "The reason is that interest earns interest. In year one you make ten dollars. In year two, you earn ten percent of one hundred and ten, so eleven dollars. Each year the step gets a little bigger than the last, and those little differences stack.",
+      "visual": "Bars for years one to six. Blue base is last year's balance, yellow cap is the interest. On 'year one' bar 1 grows with a $10 cap. On 'year two' bar 2 with $11. On 'each year' bars 3-6 grow in a lagged start, caps visibly taller each time."
+    },
+    {
+      "id": "03",
+      "narration": "Plot it and you see the shape. Simple interest is a straight line. Compound interest curves upward, slowly at first, then steeply. The gap between them is the interest on the interest, and after thirty years, it's most of the money.",
+      "visual": "On 'Plot it' axes 0-30 years, 0-1800 dollars. On 'Simple interest' a blue straight line draws. On 'Compound interest' a yellow curve draws, run_time until 'steeply'. On 'The gap' shade the area between. On 'most of the money' a brace on the right edge labelled 'interest on interest'."
+    }
+  ]
+}
