@@ -48,7 +48,8 @@ reading list) or `EXPLAINER_UNATTENDED=1` is set, nobody is there to answer or w
 - Ask nothing. Instead of step 1, pick the style from the topic (`3b1b` for maths/CS/ML theory,
   `welch` for physics and ML intuition, `econ` for economics/markets), 2–3 min, 16:9, voice `af_heart`,
   subtitles on, no music, unless the prompt says otherwise.
-- Put the project where the prompt says, else `$EXPLAINER_OUT/<name>/`.
+- Put the project where the prompt says, else `$EXPLAINER_OUT/<name>/` if set, else `$SKILL/videos/<name>/`.
+  (Callers: pass the path in the prompt or set `EXPLAINER_OUT`; nothing sets it by default.)
 - Bound the preview loop: at most 3 fix-and-re-render rounds per block, then keep the best version.
 - Don't `open` anything. Always finish with exactly one of
   `python3 $SKILL/scripts/result.py project/ --status ok` or
