@@ -10,7 +10,10 @@ short audio is padded with silence. Nothing is ever sped up or stretched.
 """
 import sys as _s, os as _o; _s.path.insert(0, _o.path.dirname(_o.path.abspath(__file__))); import _bootstrap  # noqa: E402
 import argparse, json, os, re, shutil, subprocess, sys
+from fractions import Fraction
 from pathlib import Path
+
+from fonts import resolve_font
 
 # Prefer Homebrew's ffmpeg-full (keg-only) because the plain `ffmpeg` bottle lacks libass
 # (subtitle burn-in) and drawtext.
@@ -30,7 +33,7 @@ def probe(path):
     j = json.loads(sh([FFPROBE, "-v", "error", "-show_streams", "-show_format", "-of", "json", str(path)]))
     v = next((s for s in j["streams"] if s["codec_type"] == "video"), {})
     return {"duration": float(j["format"]["duration"]), "w": v.get("width"), "h": v.get("height"),
-            "fps": eval(v.get("r_frame_rate", "0/1"))}
+            "fps": float(Fraction(v.get("r_frame_rate", "0/1")))}
 
 
 def srt_time(t):
@@ -128,7 +131,7 @@ def main():
         a.subtitles = False
     if a.subtitles:
         srt = proj / "subtitles.srt"; build_srt(blocks, offsets, srt)
-        style = "FontName=Helvetica Neue,FontSize=18,Bold=1,Italic=0,PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,Outline=1.5,Shadow=0,MarginV=36"
+        style = f"FontName={resolve_font('Helvetica Neue')},FontSize=18,Bold=1,Italic=0,PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,Outline=1.5,Shadow=0,MarginV=36"
         # relative filename + cwd=proj: ffmpeg's filter parser chokes on spaces/quotes in absolute paths
         vf.append(f"subtitles=filename=subtitles.srt:force_style='{style}'")
     if a.music:

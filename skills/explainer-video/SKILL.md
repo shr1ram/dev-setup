@@ -16,7 +16,8 @@ allowed-tools: Bash, Read, Write, Edit, WebSearch, WebFetch
 # Explainer video (local, free)
 
 One project directory in, one `final.mp4` out. Put new projects in `$SKILL/videos/<name>/`
-(gitignored; `$SKILL` resolves to `~/dev-setup/skills/explainer-video` through the `~/.claude/skills` symlink). Narration is generated first, so every animation can
+(gitignored; `$SKILL` is `~/.claude/skills/explainer-video`, a symlink to this repo's `skills/explainer-video`),
+or in `$EXPLAINER_OUT/<name>/` when that is set. Narration is generated first, so every animation can
 be timed to the exact word it illustrates; that is what makes the result feel like the reference
 channels rather than a slideshow.
 
@@ -34,10 +35,26 @@ project/
 ```bash
 SKILL=~/.claude/skills/explainer-video; bash $SKILL/scripts/setup.sh
 ```
-Run this once at the start: it installs anything missing (Homebrew libs, a uv venv with Manim +
-Kokoro) and prints what is available. Read its last lines: if `latex: MISSING`, use `Text()` instead
+Run this once at the start: it installs anything missing (on macOS Homebrew libs; on Linux it only
+checks the system packages, which come from the image) plus a uv venv with Manim + Kokoro, and prints
+what is available. Read its last lines: if `latex: MISSING`, use `Text()` instead
 of `MathTex` or ask the user to install BasicTeX. The scripts below re-exec themselves inside that
 venv, so call them with plain `python3` from any shell; `$SKILL` is just shorthand for the path.
+
+## Unattended mode
+
+When the prompt says the run is unattended (e.g. an automation making a video for a paper on a
+reading list) or `EXPLAINER_UNATTENDED=1` is set, nobody is there to answer or watch:
+- Ask nothing. Instead of step 1, pick the style from the topic (`3b1b` for maths/CS/ML theory,
+  `welch` for physics and ML intuition, `econ` for economics/markets), 2–3 min, 16:9, voice `af_heart`,
+  subtitles on, no music, unless the prompt says otherwise.
+- Put the project where the prompt says, else `$EXPLAINER_OUT/<name>/`.
+- Bound the preview loop: at most 3 fix-and-re-render rounds per block, then keep the best version.
+- Don't `open` anything. Always finish with exactly one of
+  `python3 $SKILL/scripts/result.py project/ --status ok` or
+  `python3 $SKILL/scripts/result.py project/ --status failed --reason "<one sentence>"`.
+  `result.json` is what the caller reads; if you hit a problem you cannot fix, record the failure
+  rather than stopping silently.
 
 ## 1. Settle the brief in one turn
 
@@ -101,8 +118,14 @@ Mention how to change things cheaply: narration edits only re-run tts + that blo
 
 ## When things go wrong
 - `KeyError: phrase ... not found`: the `at()` string doesn't match the narration; copy it from the error.
+- `[explainer] WARNING ... fires Xs late` (printed by render.py): earlier animations in that block run
+  too long, so this beat lands after its word; shorten their `run_time`s.
+- `[explainer] WARNING ... visuals run Xs past the narration`: trim animations or add narration.
 - Block video shorter than audio (assembler note): add `self.finish()` or more visuals.
-- `FileNotFoundError ... renders/Tex/*.dvi`: a stale parallel-render race; re-run that block alone (`--blocks NN`).
+- `FAIL BlockNN ... timed out after 600s`: the scene hangs (often an updater that never settles, or a
+  huge `wait`); fix it and re-render that block (`--timeout` raises the limit for genuinely long scenes).
+- `[explainer] font 'Helvetica Neue' not installed; using ...`: normal on Linux; the theme's macOS font
+  was swapped for the closest installed one (see `scripts/fonts.py`).
 - `explainer-video venv not found`: run `bash $SKILL/scripts/setup.sh`.
 - MathTex errors: no LaTeX; switch to `Text()` or install BasicTeX.
 - Kokoro pronounces a term oddly: respell it phonetically in narration (e.g. "Nvidia" -> "en-vidia"),

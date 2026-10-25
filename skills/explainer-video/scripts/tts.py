@@ -52,7 +52,8 @@ def main():
     out = []
     for b in script["blocks"]:
         bid, text = b["id"], norm_text(b["narration"])
-        digest = hashlib.sha1(f"{voice}|{speed}|{text}".encode()).hexdigest()[:12]
+        key = f"{voice}|{speed}|{text}" + (f"|{lang}" if lang != "a" else "")
+        digest = hashlib.sha1(key.encode()).hexdigest()[:12]
         prev = old.get(bid)
         reuse = (prev and prev.get("hash") == digest and (proj / prev["audio"]).exists()
                  and not a.force and (want is None or bid not in want))

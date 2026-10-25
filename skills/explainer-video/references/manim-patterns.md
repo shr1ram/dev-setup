@@ -23,7 +23,9 @@ class Block01(ExplainerScene):
 ## The timing contract
 - `tts.py` runs first, so every scene knows its narration length (`self.narration_duration`) and word times.
 - `self.at("phrase", *anims)` waits until that phrase is spoken, then plays. Phrase matching ignores
-  case and punctuation; use `occurrence=2` for a repeated phrase, `lead=0.3` to start slightly before.
+  case and punctuation (commas and full stops between the words are fine); use `occurrence=2` for a
+  repeated phrase, `lead=0.3` to start slightly before. A beat that can't fire on time (earlier
+  animations ran long) prints `[explainer] WARNING ... fires Xs late` in render.py's output.
   A wrong phrase raises `KeyError` with the narration printed, so you can fix the string. Apostrophes are
   part of the token: `self.at("Bayes' rule")`, not `self.at("Bayes")`.
 - `self.finish()` as the last line holds the final frame to the end of the audio. Without it the
@@ -60,7 +62,9 @@ class Block01(ExplainerScene):
 - Stagger: `LaggedStart(*anims, lag_ratio=0.15)`; group reveal: `AnimationGroup`.
 - Keep everything inside the frame: `config.frame_width` x `config.frame_height` (14.2 x 8 for 16:9, 4.5 x 8 for 9:16); `.to_edge()`, `.scale_to_fit_width()`.
 - Vertical videos: stack vertically, font sizes ~0.6x, headlines shorter.
-- Fonts: available `Avenir Next`, `Helvetica Neue`, `Futura`, `Georgia`, `Menlo`. Weights: `NORMAL`, `BOLD`, `SEMIBOLD`, `LIGHT`.
+- Fonts: the themes use `Helvetica Neue` / `Avenir Next` (macOS). Elsewhere `scripts/fonts.py` swaps in
+  the closest installed font (TeX Gyre Heros, Nunito Sans, ...) and prints a note. If you pass `font=`
+  yourself, use `resolve_font("Futura")` etc. so it works on both. Weights: `NORMAL`, `BOLD`, `SEMIBOLD`, `LIGHT`.
 - Images: `ImageMobject("path.png").scale_to_fit_height(3)` (use `Group`, not `VGroup`, with images). SVG: `SVGMobject("icon.svg")`.
 - `-q l` previews are 854x480@15fps: text looks coarse there, judge layout not crispness.
 
@@ -77,7 +81,7 @@ class Block01(ExplainerScene):
   use `FadeOut`/`FadeIn` (or `FadeTransform`) instead of `ReplacementTransform`.
 - Don't name your own attributes `duration`, `animations`, `mobjects`, `time`: Manim's Scene overwrites them. The narration length is `self.narration_duration`.
 - Keep ~0.6 scene units of margin on both sides for axis/brace labels: a label placed `RIGHT` of an object near the edge gets clipped. Check the sheet.
-- `Text` with `font=""` errors: the lib already skips the kwarg for the 3b1b theme.
+- `Text` with `font=""` errors; `self.text()` only passes `font` when the theme sets one.
 - `MathTex`/`Tex` without LaTeX raise at render time; check `setup.sh` output first. `DecimalNumber`, axis tick numbers and `self.counter` are patched to use `Text` automatically when LaTeX is missing (`HAS_LATEX` in explainer_lib).
 - `set_color_by_t2c` keys must be exact substrings of the text.
 - `ThreeDScene` + `Text`: call `self.add_fixed_in_frame_mobjects(text)` so labels face the camera.

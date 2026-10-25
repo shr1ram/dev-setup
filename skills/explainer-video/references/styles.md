@@ -4,6 +4,9 @@ Pick one theme per video and keep it. All three reference channels share one rul
 **the narration carries the words, the screen carries the picture.** On-screen text is a
 label, a number, or a headline, never a paragraph.
 
+Fonts are the macOS names; on Linux `scripts/fonts.py` substitutes TeX Gyre Heros (for Helvetica Neue)
+and Nunito Sans (for Avenir Next) when installed.
+
 | theme   | feel | bg | type | signature moves |
 |---------|------|----|------|-----------------|
 | `3b1b`  | 3Blue1Brown | black | Helvetica Neue, LaTeX math | Write/Create reveals, Transform between equation steps, colour-coded quantities, dots on number lines, braces with labels, slow camera zooms |

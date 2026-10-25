@@ -1,27 +1,42 @@
 #!/usr/bin/env bash
-# Idempotent environment check/installer for the explainer-video skill (macOS, Homebrew + uv).
+# Idempotent environment check/installer for the explainer-video skill.
+#   macOS: installs missing system libs with Homebrew, then the Python venv.
+#   Linux (e.g. a container): system packages come from the image; this only checks them and
+#          builds the Python venv if it is missing.
 # Usage: source scripts/setup.sh      (exports PATH/VIRTUAL_ENV for this shell)
 #        bash   scripts/setup.sh      (just checks/installs and reports)
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-ENV_DIR="$SKILL_DIR"
-VENV="$SKILL_DIR/.venv"
-export HF_HOME="$SKILL_DIR/models/huggingface"   # Kokoro weights land here (gitignored)
+VENV="${EXPLAINER_VENV:-$SKILL_DIR/.venv}"
+export HF_HOME="${HF_HOME:-$SKILL_DIR/models/huggingface}"   # Kokoro weights land here (gitignored)
+OS="$(uname -s)"
 missing=()
-for b in ffmpeg ffprobe uv brew; do command -v $b >/dev/null || missing+=($b); done
-if [ ${#missing[@]} -gt 0 ]; then
-  echo "missing: ${missing[*]}"
-  echo "  brew install ffmpeg        # ffmpeg/ffprobe"
-  echo "  curl -LsSf https://astral.sh/uv/install.sh | sh   # uv"
+for b in ffmpeg ffprobe uv; do command -v $b >/dev/null || missing+=($b); done
+if [ "$OS" = "Darwin" ]; then
+  command -v brew >/dev/null || missing+=(brew)
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "missing: ${missing[*]}"
+    echo "  brew install ffmpeg        # ffmpeg/ffprobe"
+    echo "  curl -LsSf https://astral.sh/uv/install.sh | sh   # uv"
+  fi
+  for lib in cairo pango pkg-config espeak-ng; do
+    brew list --versions $lib >/dev/null 2>&1 || { echo "installing $lib via brew"; brew install $lib; }
+  done
+  # The plain ffmpeg bottle has no libass (subtitle burn-in) or drawtext; ffmpeg-full (keg-only) does.
+  # assemble.py/sheet.py prefer /opt/homebrew/opt/ffmpeg-full/bin automatically when present.
+  [ -x /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg ] || { echo "installing ffmpeg-full via brew (for burned subtitles; takes a few minutes)"; brew install ffmpeg-full; }
+else
+  for b in espeak-ng pkg-config fc-list; do command -v $b >/dev/null || missing+=($b); done
+  pkg-config --exists cairo pangocairo 2>/dev/null || missing+=("cairo/pango dev headers")
+  if [ ${#missing[@]} -gt 0 ]; then
+    echo "missing: ${missing[*]}"
+    echo "  apt-get install ffmpeg espeak-ng pkg-config libcairo2-dev libpango1.0-dev fontconfig"
+    echo "  curl -LsSf https://astral.sh/uv/install.sh | sh   # uv"
+  fi
 fi
-for lib in cairo pango pkg-config espeak-ng; do
-  brew list --versions $lib >/dev/null 2>&1 || { echo "installing $lib via brew"; brew install $lib; }
-done
-# The plain ffmpeg bottle has no libass (subtitle burn-in) or drawtext; ffmpeg-full (keg-only) does.
-# assemble.py/sheet.py prefer /opt/homebrew/opt/ffmpeg-full/bin automatically when present.
-[ -x /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg ] || { echo "installing ffmpeg-full via brew (for burned subtitles; takes a few minutes)"; brew install ffmpeg-full; }
 if [ ! -x "$VENV/bin/python" ]; then
+  command -v uv >/dev/null || { echo "uv is required to build $VENV"; return 1 2>/dev/null || exit 1; }
   echo "creating $VENV (python 3.12) and installing manim + kokoro (first time: a few minutes)"
-  mkdir -p "$ENV_DIR" && uv venv --python 3.12 "$VENV"
+  mkdir -p "$(dirname "$VENV")" && uv venv --python 3.12 "$VENV"
 fi
 export VIRTUAL_ENV="$VENV"
 export PATH="$VENV/bin:$PATH"
@@ -34,9 +49,26 @@ export PATH="$VENV/bin:$PATH"
   uv pip install --python "$VENV/bin/python" \
     "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
 LATEX=$(command -v latex || ls /Library/TeX/texbin/latex 2>/dev/null)
+FF=$( [ -x /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg ] && echo /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg || command -v ffmpeg )
+SUBS=$( [ -n "$FF" ] && "$FF" -hide_banner -filters 2>/dev/null | grep -qE '\ssubtitles\s' && echo yes || echo 'no -> subtitles become a soft track' )
+FONTS=$(PYTHONPATH="$SKILL_DIR/scripts" "$VENV/bin/python" - <<'PY' 2>/dev/null
+from fonts import installed_fonts, FONT_FALLBACKS
+have = installed_fonts()
+out = []
+for name in ("Helvetica Neue", "Avenir Next"):
+    use = name if name in have else next((f for f in FONT_FALLBACKS[name] if f in have), None)
+    out.append(f"{name} -> {use or 'MISSING (renderer will substitute)'}")
+print("; ".join(out))
+PY
+)
 echo "python:  $VENV/bin/python"
 echo "models:  $HF_HOME $([ -d "$HF_HOME/hub/models--hexgrad--Kokoro-82M" ] && echo '(Kokoro cached)' || echo '(Kokoro downloads on first tts.py run, ~330 MB)')"
 echo "manim:   $("$VENV/bin/python" -c 'import manim;print(manim.__version__)' 2>/dev/null || echo MISSING)"
 echo "kokoro:  $("$VENV/bin/python" -c 'import kokoro;print("ok")' 2>/dev/null || echo MISSING)"
-echo "ffmpeg:  $(command -v ffmpeg || echo MISSING)   full build: $([ -x /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg ] && echo yes || echo 'no -> subtitles become a soft track')"
-echo "latex:   ${LATEX:-MISSING -> MathTex/Tex unavailable; use Text() for formulas, or ask the user to run: brew install --cask basictex (needs password), then: sudo tlmgr install standalone preview doublestroke dvisvgm}"
+echo "ffmpeg:  ${FF:-MISSING}   burned subtitles: $SUBS"
+echo "fonts:   ${FONTS:-unknown}"
+if [ "$OS" = "Darwin" ]; then
+  echo "latex:   ${LATEX:-MISSING -> MathTex/Tex unavailable; use Text() for formulas, or ask the user to run: brew install --cask basictex (needs password), then: sudo tlmgr install standalone preview doublestroke dvisvgm}"
+else
+  echo "latex:   ${LATEX:-MISSING -> MathTex/Tex unavailable; use Text() for formulas (apt-get install texlive-latex-extra texlive-fonts-extra dvisvgm)}"
+fi

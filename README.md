@@ -127,6 +127,9 @@ The `explainer-video` skill makes narrated, animated explainer videos entirely l
 environment and model weights are not in git: the first run of the skill (or
 `skills/explainer-video/scripts/setup.sh`) installs them into the skill folder. On macOS it also
 needs Homebrew (`ffmpeg`, `ffmpeg-full`, `cairo`, `pango`, `espeak-ng`) and BasicTeX for equations.
+On Linux the system packages must already be installed (`ffmpeg` with libass, `espeak-ng`, cairo/pango
+dev headers, fontconfig, TeX Live, and fonts TeX Gyre Heros + Nunito Sans); `setup.sh` checks them and
+builds the venv. For unattended runs the skill writes `result.json` (see SKILL.md, "Unattended mode").
 
 ## Updating Configs
 

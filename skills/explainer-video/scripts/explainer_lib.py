@@ -11,6 +11,7 @@ Attributes: self.theme, self.narration, self.narration_duration, self.words, sel
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -20,6 +21,8 @@ from pathlib import Path
 from manim import *  # noqa: F401,F403  (re-exported for scenes.py)
 from manim import Scene, ThreeDScene, MovingCameraScene, Text, VGroup, DecimalNumber, ValueTracker, config
 from manim import UP, DOWN, LEFT, RIGHT, ORIGIN, UL, UR, DL, DR, WHITE, BLACK
+
+from fonts import resolve_font
 
 # --------------------------------------------------------------------------- themes
 
@@ -126,7 +129,9 @@ class _ExplainerMixin:
         project = Path(os.environ.get("EXPLAINER_PROJECT", "."))
         self.project = project
         self.script = json.loads((project / "script.json").read_text())
-        self.theme: Theme = THEMES[self.theme_name or self.script.get("style", "3b1b")]
+        theme = THEMES[self.theme_name or self.script.get("style", "3b1b")]
+        # macOS theme fonts are swapped for installed lookalikes elsewhere (see fonts.py).
+        self.theme: Theme = dataclasses.replace(theme, font=resolve_font(theme.font))
         self.camera.background_color = self.theme.bg
         os.environ["EXPLAINER_FONT"] = self.theme.font
         os.environ["EXPLAINER_TEX_NUMBERS"] = "1" if self.theme.tex_numbers else "0"
@@ -162,28 +167,44 @@ class _ExplainerMixin:
         """Time (s) when `phrase` starts (or ends) in the narration. Falls back to a
         proportional estimate if timings are missing, so scenes still render."""
         target = [_strip(w) for w in phrase.split() if _strip(w)]
+        if not target:
+            raise ValueError(f"phrase {phrase!r} has no words to match")
         if not self.words:
             # proportional guess by character position
             idx = self.narration.lower().find(phrase.lower())
             frac = (idx / max(1, len(self.narration))) if idx >= 0 else 0.0
             return frac * self.narration_duration
-        toks = [_strip(w["w"]) for w in self.words]
+        # Kokoro emits punctuation as tokens of its own; match on words only, keeping each word's
+        # index into self.words for its timestamps.
+        toks = [(t, i) for i, w in enumerate(self.words) if (t := _strip(w["w"]))]
+        names = [t for t, _ in toks]
+        n = len(target)
         seen = 0
-        for i in range(len(toks) - len(target) + 1):
-            if toks[i:i + len(target)] == target:
+        for k in range(len(names) - n + 1):
+            if names[k:k + n] == target:
                 seen += 1
                 if seen == occurrence:
-                    return float(self.words[i + len(target) - 1]["e"] if end else self.words[i]["s"])
+                    first, last = toks[k][1], toks[k + n - 1][1]
+                    return float(self.words[last]["e"] if end else self.words[first]["s"])
         raise KeyError(f"phrase {phrase!r} not found in block {self.block_id} narration: {self.narration!r}")
 
     def at(self, phrase: str, *anims, occurrence: int = 1, lead: float = 0.0, **kw):
         """Wait until `phrase` is spoken (minus `lead` seconds), then play anims."""
-        self.wait_until(self.word_time(phrase, occurrence) - lead)
+        t = self.word_time(phrase, occurrence) - lead
+        late = self.now - t
+        if late > 0.5:
+            print(f"[explainer] WARNING: block {self.block_id}: {phrase!r} fires {late:.1f}s late "
+                  f"(spoken at {t:.1f}s, scene already at {self.now:.1f}s); shorten the run_time of earlier animations")
+        self.wait_until(t)
         if anims:
             self.play(*anims, **kw)
 
     def finish(self, tail: float = 0.6):
         """Hold the last frame until the narration has ended (+tail). Call last."""
+        over = self.now - (self.narration_duration + tail)
+        if over > 0.5:
+            print(f"[explainer] WARNING: block {self.block_id}: visuals run {over:.1f}s past the narration "
+                  f"({self.now:.1f}s vs {self.narration_duration:.1f}s of speech); trim animations or add narration")
         self.wait_until(self.narration_duration + tail)
 
     # ---- text helpers in the theme
