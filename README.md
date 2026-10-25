@@ -147,7 +147,7 @@ dev-setup/
 │   ├── bashrc                # Bash config
 │   ├── cshrc                 # tcsh/csh config (lab machines)
 │   ├── tmux.conf             # tmux config
-│   └── claude_settings.json  # Claude Code settings + permissions
+│   └── claude_settings.json  # Claude Code settings + permissions (Remote Control on for every interactive session)
 ├── skills/                   # Claude Code skills, symlinked into ~/.claude/skills by setup.sh
 │   └── explainer-video/      # Local explainer-video pipeline (Manim + Kokoro + ffmpeg)
 │       ├── SKILL.md          # Workflow Claude follows
