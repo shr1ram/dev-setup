@@ -46,7 +46,7 @@ def main():
     if not isinstance(script, dict):
         script = {}
     blocks, sources = script.get("blocks"), script.get("sources")
-    res = {"status": a.status, "reason": a.reason, "title": script.get("title") or "",
+    res = {"status": a.status, "reason": a.reason, "project": str(proj), "title": script.get("title") or "",
            "style": script.get("style") or "", "voice": script.get("voice") or "",
            "subtitles": bool(script.get("subtitles")),
            "blocks": len(blocks) if isinstance(blocks, list) else 0,

@@ -448,7 +448,10 @@ setup_claude() {
             if [[ -e "$dest" && ! -L "$dest" ]]; then
                 # Outside skills/: Claude Code loads every folder there with a SKILL.md as a skill.
                 local backup="$backups/$name.backup.$(date +%Y%m%d_%H%M%S)"
-                mkdir -p "$backups" && mv "$dest" "$backup"
+                if ! { mkdir -p "$backups" && mv "$dest" "$backup"; }; then
+                    error "Could not move $dest to $backup; not linking skill $name"
+                    continue
+                fi
                 warn "Moved existing $dest to $backup"
             fi
             ln -sfn "${skill%/}" "$dest"

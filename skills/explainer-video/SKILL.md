@@ -56,7 +56,8 @@ reading list) or `EXPLAINER_UNATTENDED=1` is set, nobody is there to answer or w
   `python3 $SKILL/scripts/result.py project/ --status ok` or
   `python3 $SKILL/scripts/result.py project/ --status failed --reason "<one sentence>"`.
   `result.json` is what the caller reads; if you hit a problem you cannot fix, record the failure
-  rather than stopping silently.
+  rather than stopping silently. It records the project's absolute path (`project`); also end your
+  reply with that path, so a caller that let you choose `<name>` can find it.
 
 ## 1. Settle the brief in one turn
 

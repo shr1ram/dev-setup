@@ -55,7 +55,8 @@ _explainer_setup() {
   if ! "$VENV/bin/python" - "${PINS[@]}" 2>/dev/null <<'PY'
 import sys, importlib.metadata as md
 import manim, kokoro, soundfile, pypdf  # noqa: F401
-sys.exit(any(md.version(n) != v for n, v in (p.split("==") for p in sys.argv[1:])))
+bad = any(md.version(n) != v for n, v in (p.split("==") for p in sys.argv[1:]))
+sys.exit(bad or tuple(map(int, md.version("numpy").split(".")[:2])) >= (2, 3))  # same as the "numpy<2.3" below
 PY
   then
     uv pip install --python "$VENV/bin/python" manim kokoro soundfile pypdf "numpy<2.3" "${PINS[@]}" \
