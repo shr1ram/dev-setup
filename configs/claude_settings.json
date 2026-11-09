@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ \"$CLAUDE_CODE_SUBPROCESS\" = \"1\" ] && exit 0; osascript -e \"display notification \\\"Claude Code has finished its task.\\\" with title \\\"Task Completed\\\" sound name \\\"Glass\\\"\""
+            "command": "[ \"$CLAUDE_CODE_SUBPROCESS\" = \"1\" ] && exit 0; osascript -e \"display notification \\\"Claude Code has finished its task.\\\" with title \\\"Task Completed\\\"\""
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ \"$CLAUDE_CODE_SUBPROCESS\" = \"1\" ] && exit 0; osascript -e \"display notification \\\"Claude Code needs your permission to proceed.\\\" with title \\\"User Input Required\\\" sound name \\\"Ping\\\"\""
+            "command": "[ \"$CLAUDE_CODE_SUBPROCESS\" = \"1\" ] && exit 0; osascript -e \"display notification \\\"Claude Code needs your permission to proceed.\\\" with title \\\"User Input Required\\\"\""
           }
         ]
       }
