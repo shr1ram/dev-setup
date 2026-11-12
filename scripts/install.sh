@@ -430,26 +430,43 @@ install_claude_settings() {
         return
     fi
 
+    # Every version of the settings file the repo has shipped, so entries an older install left behind are
+    # recognised as the repo's (and removed when it dropped them), even on a machine with no base yet.
+    local past_dir args=("$src" "$dest" "$base")
+    past_dir="$(mktemp -d)"
+    if git -C "$CLONE_DIR" rev-parse --git-dir &>/dev/null; then
+        local sha n=0
+        while read -r sha; do
+            if git -C "$CLONE_DIR" show "${sha}:configs/claude_settings.json" > "$past_dir/$n.json" 2>/dev/null; then
+                args+=(--past "$past_dir/$n.json")
+            fi
+            n=$((n + 1))
+        done < <(git -C "$CLONE_DIR" log --format=%H -- configs/claude_settings.json)
+    fi
+
     local rc=0
-    python3 -I "$merge" "$src" "$dest" "$base" --dry-run || rc=$?
+    python3 -I "$merge" "${args[@]}" --dry-run || rc=$?
     case "$rc" in
         0)  ok "$dest already has the repo's settings"
             # Record the base even when nothing changed, so later removals from the repo are tracked.
-            [[ "$DRY_RUN" == true ]] || python3 -I "$merge" "$src" "$dest" "$base" >/dev/null
+            if [[ "$DRY_RUN" != true ]] && ! python3 -I "$merge" "${args[@]}" >/dev/null; then
+                warn "Could not record $base; settings removed from the repo later may be left in $dest"
+            fi
             ;;
         10) if [[ "$DRY_RUN" == true ]]; then
                 info "[DRY RUN] Would merge the changes above into $dest"
             else
                 backup_file "$dest"
-                if python3 -I "$merge" "$src" "$dest" "$base" >/dev/null; then
+                if python3 -I "$merge" "${args[@]}" >/dev/null; then
                     ok "Merged the repo's settings into $dest"
                 else
                     error "Could not merge settings into $dest; it is unchanged"
                 fi
             fi
             ;;
-        *)  error "Could not read the settings files; $dest is unchanged" ;;
+        *)  error "Could not merge the settings (see above); $dest is unchanged" ;;
     esac
+    rm -rf "$past_dir"
 }
 
 setup_claude() {
