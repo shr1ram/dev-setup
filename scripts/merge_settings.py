@@ -27,6 +27,15 @@ import sys
 import tempfile
 
 
+def same(a, b):
+    """JSON equality: unlike ==, true and 1 differ, as do 1 and 1.0."""
+    return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
+
+
+def has(items, x):
+    return any(same(x, i) for i in items)
+
+
 def plural(n):
     return f"{n} entr{'y' if n == 1 else 'ies'}"
 
@@ -47,7 +56,7 @@ def merge(live, bases, repo, path, changes):
                 out[key] = r
                 if key not in live:
                     changes.append(f"+ {p}")
-                elif l != r:
+                elif not same(l, r):
                     changes.append(f"~ {p}")
         elif olds:
             # The repo dropped this key. Remove what the repo put there; keep what was added by hand.
@@ -57,7 +66,7 @@ def merge(live, bases, repo, path, changes):
             elif isinstance(l, list) and any(isinstance(o, list) for o in olds):
                 v = merge_list(l, [o for o in olds if isinstance(o, list)], [], p, inner)
             else:
-                v = None if l in olds else l
+                v = None if has(olds, l) else l
             if v in (None, {}, []):
                 changes.append(f"- {p} (dropped from the repo)")
             else:
@@ -70,10 +79,10 @@ def merge(live, bases, repo, path, changes):
 
 def merge_list(live, bases, repo, path, changes):
     seen = [x for b in bases for x in b]
-    kept = [x for x in live if x not in seen and x not in repo]
+    kept = [x for x in live if not has(seen, x) and not has(repo, x)]
     out = list(repo) + kept
-    added = [x for x in repo if x not in live]
-    removed = [x for x in live if x in seen and x not in repo]
+    added = [x for x in repo if not has(live, x)]
+    removed = [x for x in live if has(seen, x) and not has(repo, x)]
     if added:
         note = ""
         if kept:
@@ -82,7 +91,7 @@ def merge_list(live, bases, repo, path, changes):
         changes.append(f"+ {path}: {plural(len(added))} from the repo{note}")
     if removed:
         changes.append(f"- {path}: {plural(len(removed))} dropped from the repo")
-    if not added and not removed and out != live:
+    if not added and not removed and not same(out, live):
         changes.append(f"~ {path}: reordered (repo entries first)")
     return out
 
@@ -91,13 +100,17 @@ class BadFile(Exception):
     pass
 
 
+def reject_constant(name):
+    raise ValueError(f"{name} is not valid JSON")
+
+
 def load(path, missing_ok=False):
     if missing_ok and not os.path.exists(path):
         return {}
     try:
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        data = json.loads(text) if text.strip() else {}
+        data = json.loads(text, parse_constant=reject_constant) if text.strip() else {}
     except (OSError, ValueError) as e:
         raise BadFile(f"{path}: {e}") from e
     if not isinstance(data, dict):
@@ -157,13 +170,18 @@ def main(argv):
     for c in changes:
         print(f"  {c}")
     if dry:
-        return 10 if merged != live else 0
+        return 10 if not same(merged, live) else 0
     try:
-        if merged != live:
+        if not same(merged, live):
+            # Claude Code and Orca write this file too. Settings files don't support locking, so at least
+            # refuse to overwrite a change made since we read it.
+            if not same(load(live_path, missing_ok=True), live):
+                print(f"{live_path} changed while merging; run setup again", file=sys.stderr)
+                return 2
             write_atomic(live_path, merged)
-        if base != repo:
+        if not same(base, repo):
             write_atomic(base_path, repo)
-    except OSError as e:
+    except (OSError, BadFile) as e:
         print(f"Can't write settings: {e}", file=sys.stderr)
         return 2
     return 0

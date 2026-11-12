@@ -62,7 +62,7 @@ Everything in minimal, plus:
 ### Orbital (`--orbital`, opt-in)
 Adds the work tooling from the private repo's `orbital/` folder. On macOS it symlinks `~/.local/bin/gpu-login`, the GPU-session login helper. Nothing else is installed; see the private repo's `orbital/README.md` for usage and one-time setup. Combine it with any other flags, e.g. `--full --orbital` or `--orbital --skip-ssh`.
 
-Existing files are backed up before overwriting (max 3 kept per file). Claude Code settings are merged rather than copied, because other tools (such as Orca's agent hooks) and hand edits live in the same file: the repo's keys and list entries win, everything else is kept, and entries later dropped from the repo are removed (`scripts/merge_settings.py`; needs `python3`, and leaves the file alone without it). Running again is safe — identical configs are skipped, and it only installs what's missing.
+Existing files are backed up before overwriting (max 3 kept per file). Claude Code settings are merged rather than copied, because other tools (such as Orca's agent hooks) and hand edits live in the same file: the repo's keys and list entries win, everything else is kept, and entries later dropped from the repo are removed (`scripts/merge_settings.py`; needs `python3`, and leaves the file alone without it). Running again is safe: identical configs are skipped, and Claude settings only change where the repo's own keys and entries differ.
 
 ## What It Sets Up
 

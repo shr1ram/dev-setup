@@ -421,6 +421,14 @@ install_claude_settings() {
     local merge="$CLONE_DIR/scripts/merge_settings.py"
 
     if [[ ! -f "$dest" ]]; then
+        if command -v python3 &>/dev/null; then
+            local check=0
+            python3 -I "$merge" "$src" /dev/null /dev/null --dry-run >/dev/null || check=$?
+            if [[ "$check" -eq 2 ]]; then
+                error "Could not read $src; not installing it as $dest"
+                return
+            fi
+        fi
         install_config "$src" "$dest"
         [[ "$DRY_RUN" == true ]] || cp "$src" "$base"
         return
