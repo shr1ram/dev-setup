@@ -18,7 +18,8 @@ Rules, applied recursively:
                                   (added by hand or by another tool); entries the repo dropped are removed
 
 Usage: merge_settings.py <repo.json> <live.json> <base.json> [--past <old-repo.json>]... [--dry-run]
-Exit codes: 0 = written (or nothing to change), 10 = --dry-run and something would change, 2 = error.
+Exit codes: 0 = written (or nothing to change), 10 = --dry-run and something would change,
+            2 = error, nothing written, 3 = live settings written but the base couldn't be recorded.
 """
 
 import json
@@ -63,11 +64,13 @@ def merge(live, bases, repo, path, changes):
             inner = []
             if isinstance(l, dict) and any(isinstance(o, dict) for o in olds):
                 v = merge(l, [o for o in olds if isinstance(o, dict)], {}, p, inner)
+                gone = not v  # nothing left but the repo's old entries
             elif isinstance(l, list) and any(isinstance(o, list) for o in olds):
                 v = merge_list(l, [o for o in olds if isinstance(o, list)], [], p, inner)
+                gone = not v
             else:
-                v = None if has(olds, l) else l
-            if v in (None, {}, []):
+                v, gone = l, has(olds, l)
+            if gone:
                 changes.append(f"- {p} (dropped from the repo)")
             else:
                 out[key] = v
@@ -105,12 +108,17 @@ def reject_constant(name):
 
 
 def load(path, missing_ok=False):
+    """missing_ok: a missing or empty file counts as {} (live settings, our bookkeeping), never the repo file."""
     if missing_ok and not os.path.exists(path):
         return {}
     try:
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        data = json.loads(text, parse_constant=reject_constant) if text.strip() else {}
+        if not text.strip():
+            if missing_ok:
+                return {}
+            raise ValueError("file is empty")
+        data = json.loads(text, parse_constant=reject_constant)
     except (OSError, ValueError) as e:
         raise BadFile(f"{path}: {e}") from e
     if not isinstance(data, dict):
@@ -179,11 +187,15 @@ def main(argv):
                 print(f"{live_path} changed while merging; run setup again", file=sys.stderr)
                 return 2
             write_atomic(live_path, merged)
-        if not same(base, repo):
-            write_atomic(base_path, repo)
     except (OSError, BadFile) as e:
         print(f"Can't write settings: {e}", file=sys.stderr)
         return 2
+    try:
+        if not same(base, repo):
+            write_atomic(base_path, repo)
+    except OSError as e:
+        print(f"Can't record {base_path}: {e}", file=sys.stderr)
+        return 3
     return 0
 
 

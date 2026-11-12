@@ -465,11 +465,13 @@ install_claude_settings() {
                 info "[DRY RUN] Would merge the changes above into $dest"
             else
                 backup_file "$dest"
-                if python3 -I "$merge" "${args[@]}" >/dev/null; then
-                    ok "Merged the repo's settings into $dest"
-                else
-                    error "Could not merge settings into $dest; it is unchanged"
-                fi
+                local wrc=0
+                python3 -I "$merge" "${args[@]}" >/dev/null || wrc=$?
+                case "$wrc" in
+                    0) ok "Merged the repo's settings into $dest" ;;
+                    3) warn "Merged the repo's settings into $dest, but could not record $base" ;;
+                    *) error "Could not merge settings into $dest; it is unchanged" ;;
+                esac
             fi
             ;;
         *)  error "Could not merge the settings (see above); $dest is unchanged" ;;
