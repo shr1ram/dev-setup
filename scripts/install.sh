@@ -410,6 +410,48 @@ setup_tailscale() {
 }
 
 # ─── Claude Code ─────────────────────────────────────────────────────────────
+# Merge configs/claude_settings.json into ~/.claude/settings.json instead of copying over it: other tools
+# (Orca's agent hooks) and hand edits live there too. The repo wins on the keys and list entries it sets;
+# everything else is kept. ~/.claude/.dev-setup-settings-base.json records what was last installed, so
+# entries later dropped from the repo are removed. See scripts/merge_settings.py.
+install_claude_settings() {
+    local src="$CLONE_DIR/configs/claude_settings.json"
+    local dest="$HOME/.claude/settings.json"
+    local base="$HOME/.claude/.dev-setup-settings-base.json"
+    local merge="$CLONE_DIR/scripts/merge_settings.py"
+
+    if [[ ! -f "$dest" ]]; then
+        install_config "$src" "$dest"
+        [[ "$DRY_RUN" == true ]] || cp "$src" "$base"
+        return
+    fi
+    if ! command -v python3 &>/dev/null; then
+        warn "python3 not found: leaving $dest unchanged (merging the repo's settings needs python3)"
+        return
+    fi
+
+    local rc=0
+    python3 -I "$merge" "$src" "$dest" "$base" --dry-run || rc=$?
+    case "$rc" in
+        0)  ok "$dest already has the repo's settings"
+            # Record the base even when nothing changed, so later removals from the repo are tracked.
+            [[ "$DRY_RUN" == true ]] || python3 -I "$merge" "$src" "$dest" "$base" >/dev/null
+            ;;
+        10) if [[ "$DRY_RUN" == true ]]; then
+                info "[DRY RUN] Would merge the changes above into $dest"
+            else
+                backup_file "$dest"
+                if python3 -I "$merge" "$src" "$dest" "$base" >/dev/null; then
+                    ok "Merged the repo's settings into $dest"
+                else
+                    error "Could not merge settings into $dest; it is unchanged"
+                fi
+            fi
+            ;;
+        *)  error "Could not read the settings files; $dest is unchanged" ;;
+    esac
+}
+
 setup_claude() {
     if [[ "$SKIP_CLAUDE" == true ]]; then return; fi
     info "Setting up Claude Code..."
@@ -429,9 +471,8 @@ setup_claude() {
         ok "Claude Code already installed"
     fi
 
-    # Always copy settings
     mkdir -p "$HOME/.claude"
-    install_config "$CLONE_DIR/configs/claude_settings.json" "$HOME/.claude/settings.json"
+    install_claude_settings
 
     # Skills: symlink each skills/<name> into ~/.claude/skills (the repo copy is the source of truth)
     local skills_dir="$HOME/.claude/skills" backups="$HOME/.claude/skill-backups"
