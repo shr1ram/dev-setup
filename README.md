@@ -62,6 +62,9 @@ Everything in minimal, plus:
 ### Orbital (`--orbital`, opt-in)
 Adds the work tooling from the private repo's `orbital/` folder. On macOS it symlinks `~/.local/bin/gpu-login`, the GPU-session login helper. Nothing else is installed; see the private repo's `orbital/README.md` for usage and one-time setup. Combine it with any other flags, e.g. `--full --orbital` or `--orbital --skip-ssh`.
 
+### Workstation (`--orbital` / `--personal`, opt-in)
+Either flag also clones my private workstation repo (project rules, plans and decisions) to `~/workstation` and sets up the profile of the same name. `--personal` does nothing else. Without either flag the workstation is left alone. Details are in the private repo.
+
 Existing files are backed up before overwriting (max 3 kept per file). Running again is safe — identical configs are skipped, and it only installs what's missing.
 
 ## What It Sets Up
@@ -75,6 +78,7 @@ Existing files are backed up before overwriting (max 3 kept per file). Running a
 | `claude`   | Claude Code install + settings, hooks, permissions, skills | public  | minimal |
 | `ssh`      | SSH config (hosts, keys)                        | private | minimal |
 | `orbital`  | Orbital work tooling (`gpu-login` on PATH, macOS) | private | opt-in (`--orbital`) |
+| `workstation` | `~/workstation` clone + the matching profile | private | opt-in (`--orbital` / `--personal`) |
 | `brew`     | Installs Homebrew + packages from Brewfile      | public  | full    |
 | `shell`    | + pyenv install                                 | public  | full    |
 | `tailscale`| Tailscale VPN                                   | public  | full    |
@@ -91,9 +95,11 @@ Existing files are backed up before overwriting (max 3 kept per file). Running a
 ./setup.sh --skip-shell        # Skip zsh/bash/csh config
 ./setup.sh --skip-git          # Skip git config
 ./setup.sh --skip-private      # Skip private repo entirely (no SSH config)
-./setup.sh --orbital           # Also install Orbital work tooling (off by default)
+./setup.sh --orbital           # Also install Orbital work tooling + workstation profile (off by default)
+./setup.sh --personal          # Also set up the personal workstation profile (off by default)
 ./setup.sh --only tmux         # Only set up tmux
 ./setup.sh --only orbital      # Only set up the Orbital work tooling
+./setup.sh --only personal     # Only set up the personal workstation profile
 ./setup.sh --dry-run           # Preview without making changes
 ```
 
