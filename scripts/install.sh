@@ -109,7 +109,10 @@ if [[ -n "$ONLY_MODULE" ]]; then
         personal)  PERSONAL=true; SKIP_PRIVATE=false ;;  # workstation profile, via the private repo
         *) error "Unknown module: $ONLY_MODULE"; exit 1 ;;
     esac
-    [[ "$SKIP_PRIVATE_FLAG" == true ]] && SKIP_PRIVATE=true
+    if [[ "$SKIP_PRIVATE_FLAG" == true && "$SKIP_PRIVATE" == false ]]; then
+        warn "--skip-private overrides --only $ONLY_MODULE, which needs the private repo"
+        SKIP_PRIVATE=true
+    fi
 fi
 
 backup_file() {
@@ -481,11 +484,13 @@ setup_claude() {
 # ─── Private repo ───────────────────────────────────────────────────────────
 setup_private() {
     if [[ "$SKIP_PRIVATE" == true ]]; then
+        local why="--skip-private"
+        [[ "$SKIP_PRIVATE_FLAG" == true ]] || why="not part of --only $ONLY_MODULE"
         if [[ "$ORBITAL" == true ]]; then
-            warn "--orbital ignored: Orbital tooling lives in the private repo (--skip-private)"
+            warn "--orbital ignored: Orbital tooling lives in the private repo ($why)"
         fi
         if [[ "$PERSONAL" == true ]]; then
-            warn "--personal ignored: the workstation is set up by the private repo (--skip-private)"
+            warn "--personal ignored: the workstation is set up by the private repo ($why)"
         fi
         return 0
     fi
