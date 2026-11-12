@@ -410,6 +410,75 @@ setup_tailscale() {
 }
 
 # ─── Claude Code ─────────────────────────────────────────────────────────────
+# Merge configs/claude_settings.json into ~/.claude/settings.json instead of copying over it: other tools
+# (Orca's agent hooks) and hand edits live there too. The repo wins on the keys and list entries it sets;
+# everything else is kept. ~/.claude/.dev-setup-settings-base.json records what was last installed, so
+# entries later dropped from the repo are removed. See scripts/merge_settings.py.
+install_claude_settings() {
+    local src="$CLONE_DIR/configs/claude_settings.json"
+    local dest="$HOME/.claude/settings.json"
+    local base="$HOME/.claude/.dev-setup-settings-base.json"
+    local merge="$CLONE_DIR/scripts/merge_settings.py"
+
+    if [[ ! -f "$dest" ]]; then
+        if command -v python3 &>/dev/null; then
+            local check=0
+            python3 -I "$merge" "$src" /dev/null /dev/null --dry-run >/dev/null || check=$?
+            if [[ "$check" -eq 2 ]]; then
+                error "Could not read $src; not installing it as $dest"
+                return
+            fi
+        fi
+        install_config "$src" "$dest"
+        [[ "$DRY_RUN" == true ]] || cp "$src" "$base"
+        return
+    fi
+    if ! command -v python3 &>/dev/null; then
+        warn "python3 not found: leaving $dest unchanged (merging the repo's settings needs python3)"
+        return
+    fi
+
+    # Every version of the settings file the repo has shipped, so entries an older install left behind are
+    # recognised as the repo's (and removed when it dropped them), even on a machine with no base yet.
+    local past_dir args=("$src" "$dest" "$base")
+    past_dir="$(mktemp -d)"
+    if git -C "$CLONE_DIR" rev-parse --git-dir &>/dev/null; then
+        local sha n=0
+        while read -r sha; do
+            if git -C "$CLONE_DIR" show "${sha}:configs/claude_settings.json" > "$past_dir/$n.json" 2>/dev/null; then
+                args+=(--past "$past_dir/$n.json")
+            fi
+            n=$((n + 1))
+        done < <(git -C "$CLONE_DIR" log --format=%H -- configs/claude_settings.json)
+    fi
+
+    local rc=0
+    python3 -I "$merge" "${args[@]}" --dry-run || rc=$?
+    case "$rc" in
+        0)  ok "$dest already has the repo's settings"
+            # Record the base even when nothing changed, so later removals from the repo are tracked.
+            if [[ "$DRY_RUN" != true ]] && ! python3 -I "$merge" "${args[@]}" >/dev/null; then
+                warn "Could not record $base; settings removed from the repo later may be left in $dest"
+            fi
+            ;;
+        10) if [[ "$DRY_RUN" == true ]]; then
+                info "[DRY RUN] Would merge the changes above into $dest"
+            else
+                backup_file "$dest"
+                local wrc=0
+                python3 -I "$merge" "${args[@]}" >/dev/null || wrc=$?
+                case "$wrc" in
+                    0) ok "Merged the repo's settings into $dest" ;;
+                    3) warn "Merged the repo's settings into $dest, but could not record $base" ;;
+                    *) error "Could not merge settings into $dest; it is unchanged" ;;
+                esac
+            fi
+            ;;
+        *)  error "Could not merge the settings (see above); $dest is unchanged" ;;
+    esac
+    rm -rf "$past_dir"
+}
+
 setup_claude() {
     if [[ "$SKIP_CLAUDE" == true ]]; then return; fi
     info "Setting up Claude Code..."
@@ -429,9 +498,8 @@ setup_claude() {
         ok "Claude Code already installed"
     fi
 
-    # Always copy settings
     mkdir -p "$HOME/.claude"
-    install_config "$CLONE_DIR/configs/claude_settings.json" "$HOME/.claude/settings.json"
+    install_claude_settings
 
     # Skills: symlink each skills/<name> into ~/.claude/skills (the repo copy is the source of truth)
     local skills_dir="$HOME/.claude/skills" backups="$HOME/.claude/skill-backups"
