@@ -546,7 +546,7 @@ setup_claude() {
             rm "$link" && ok "Removed stale skill link $(basename "$link")"
         fi
     done
-    # Per-skill dependencies (e.g. skills/explainer-video/scripts/setup.sh) are run on demand by the skill.
+    # Per-skill dependencies (a skill's own scripts/setup.sh) are run on demand by the skill.
 }
 
 # ─── Private repo ───────────────────────────────────────────────────────────
