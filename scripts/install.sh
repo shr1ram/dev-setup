@@ -19,6 +19,7 @@ set -euo pipefail
 #   --skip-git        Skip git config setup
 #   --skip-private    Skip private repo setup entirely
 #   --orbital         Also install Orbital work tooling (off by default; private repo)
+#   --personal        Set up the personal workstation profile (off by default; private repo)
 #   --only <module>   Run only the specified module
 #   --dry-run         Show what would be done without making changes
 #   -h, --help        Show this help message
@@ -39,7 +40,9 @@ SKIP_BREW=false
 SKIP_SHELL=false
 SKIP_GIT=false
 SKIP_PRIVATE=false
+SKIP_PRIVATE_FLAG=false   # --skip-private given explicitly; --only must not undo it
 ORBITAL=false
+PERSONAL=false
 DRY_RUN=false
 ONLY_MODULE=""
 
@@ -73,8 +76,9 @@ while [[ $# -gt 0 ]]; do
         --skip-brew)      SKIP_BREW=true ;;
         --skip-shell)     SKIP_SHELL=true ;;
         --skip-git)       SKIP_GIT=true ;;
-        --skip-private)   SKIP_PRIVATE=true ;;
+        --skip-private)   SKIP_PRIVATE=true; SKIP_PRIVATE_FLAG=true ;;
         --orbital)        ORBITAL=true ;;
+        --personal)       PERSONAL=true ;;
         --only)
             ONLY_MODULE="$2"
             shift
@@ -93,17 +97,22 @@ if [[ -n "$ONLY_MODULE" ]]; then
     SKIP_TAILSCALE=true; SKIP_BREW=true; SKIP_SHELL=true; SKIP_GIT=true
     SKIP_PRIVATE=true
     case "$ONLY_MODULE" in
-        ssh)       SKIP_SSH=false; SKIP_SSH_KEY=false; SKIP_PRIVATE=false; ORBITAL=false ;;
+        ssh)       SKIP_SSH=false; SKIP_SSH_KEY=false; SKIP_PRIVATE=false; ORBITAL=false; PERSONAL=false ;;
         claude)    SKIP_CLAUDE=false; SKIP_SHELL=false ;;  # claude needs nvm/node from shell setup
         tmux)      SKIP_TMUX=false ;;
         tailscale) SKIP_TAILSCALE=false ;;
         brew)      SKIP_BREW=false ;;
         shell)     SKIP_SHELL=false ;;
         git)       SKIP_GIT=false ;;
-        private)   SKIP_PRIVATE=false; SKIP_SSH=false ;;  # + Orbital only if --orbital
+        private)   SKIP_PRIVATE=false; SKIP_SSH=false ;;  # + Orbital/personal only if --orbital/--personal
         orbital)   ORBITAL=true; SKIP_PRIVATE=false ;;  # lives in the private repo
+        personal)  PERSONAL=true; SKIP_PRIVATE=false ;;  # workstation profile, via the private repo
         *) error "Unknown module: $ONLY_MODULE"; exit 1 ;;
     esac
+    if [[ "$SKIP_PRIVATE_FLAG" == true && "$SKIP_PRIVATE" == false ]]; then
+        warn "--skip-private overrides --only $ONLY_MODULE, which needs the private repo"
+        SKIP_PRIVATE=true
+    fi
 fi
 
 backup_file() {
@@ -543,8 +552,13 @@ setup_claude() {
 # ─── Private repo ───────────────────────────────────────────────────────────
 setup_private() {
     if [[ "$SKIP_PRIVATE" == true ]]; then
+        local why="--skip-private"
+        [[ "$SKIP_PRIVATE_FLAG" == true ]] || why="not part of --only $ONLY_MODULE"
         if [[ "$ORBITAL" == true ]]; then
-            warn "--orbital ignored: Orbital tooling lives in the private repo (--skip-private)"
+            warn "--orbital ignored: Orbital tooling lives in the private repo ($why)"
+        fi
+        if [[ "$PERSONAL" == true ]]; then
+            warn "--personal ignored: the workstation is set up by the private repo ($why)"
         fi
         return 0
     fi
@@ -561,6 +575,7 @@ setup_private() {
     local private_args=()
     [[ "$SKIP_SSH" == true ]] && private_args+=("--skip-ssh")
     [[ "$ORBITAL" == true ]] && private_args+=("--orbital")
+    [[ "$PERSONAL" == true ]] && private_args+=("--personal")
 
     info "Cloning private config repo..."
     if [[ "$DRY_RUN" == true ]]; then

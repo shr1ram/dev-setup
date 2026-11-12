@@ -60,7 +60,10 @@ Everything in minimal, plus:
 - Installs Tailscale
 
 ### Orbital (`--orbital`, opt-in)
-Adds the work tooling from the private repo's `orbital/` folder. On macOS it symlinks `~/.local/bin/gpu-login`, the GPU-session login helper. Nothing else is installed; see the private repo's `orbital/README.md` for usage and one-time setup. Combine it with any other flags, e.g. `--full --orbital` or `--orbital --skip-ssh`.
+Adds the work tooling from the private repo's `orbital/` folder. On macOS it symlinks `~/.local/bin/gpu-login`, the GPU-session login helper, and it sets up the workstation's orbital profile (below). See the private repo's `orbital/README.md` for usage and one-time setup. Combine it with any other flags, e.g. `--full --orbital` or `--orbital --skip-ssh`.
+
+### Workstation (`--orbital` / `--personal`, opt-in)
+Either flag also clones my private workstation repo (project rules, plans and decisions) to `~/workstation` and sets up the profile of the same name. `--personal` does nothing else. Without either flag the workstation is left alone. Both flags are ignored with `--skip-private`, and with `--only` for any module other than `private`, `orbital` or `personal` (`--only ssh` turns them off). Details are in the private repo.
 
 Existing files are backed up before overwriting (max 3 kept per file). Claude Code settings are merged rather than copied, because other tools (such as Orca's agent hooks) and hand edits live in the same file: the repo's keys and list entries win, everything else is kept, and entries later dropped from the repo are removed (`scripts/merge_settings.py`; needs `python3`, and leaves the file alone without it). Running again is safe: identical configs are skipped, and Claude settings only change where the repo's own keys and entries differ.
 
@@ -74,7 +77,8 @@ Existing files are backed up before overwriting (max 3 kept per file). Claude Co
 | `gh`       | GitHub CLI (standalone binary)                  | public  | minimal |
 | `claude`   | Claude Code install + settings, hooks, permissions, skills | public  | minimal |
 | `ssh`      | SSH config (hosts, keys)                        | private | minimal |
-| `orbital`  | Orbital work tooling (`gpu-login` on PATH, macOS) | private | opt-in (`--orbital`) |
+| `orbital`  | Orbital work tooling (`gpu-login` on PATH, macOS) + the workstation's orbital profile | private | opt-in (`--orbital`) |
+| `personal` | The workstation's personal profile (`~/workstation` clone) | private | opt-in (`--personal`) |
 | `brew`     | Installs Homebrew + packages from Brewfile      | public  | full    |
 | `shell`    | + pyenv install                                 | public  | full    |
 | `tailscale`| Tailscale VPN                                   | public  | full    |
@@ -91,9 +95,11 @@ Existing files are backed up before overwriting (max 3 kept per file). Claude Co
 ./setup.sh --skip-shell        # Skip zsh/bash/csh config
 ./setup.sh --skip-git          # Skip git config
 ./setup.sh --skip-private      # Skip private repo entirely (no SSH config)
-./setup.sh --orbital           # Also install Orbital work tooling (off by default)
+./setup.sh --orbital           # Also install Orbital work tooling + workstation profile (off by default)
+./setup.sh --personal          # Also set up the personal workstation profile (off by default)
 ./setup.sh --only tmux         # Only set up tmux
 ./setup.sh --only orbital      # Only set up the Orbital work tooling
+./setup.sh --only personal     # Only set up the personal workstation profile
 ./setup.sh --dry-run           # Preview without making changes
 ```
 
