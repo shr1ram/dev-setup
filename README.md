@@ -144,7 +144,7 @@ For unattended runs the skill writes `result.json` (see SKILL.md, "Unattended mo
 
 ## Updating Configs
 
-Configs in this repo are the source of truth. Don't edit live files (`~/.zshrc`, `~/.bashrc`, `~/.cshrc`, etc.) directly — edit the source in `configs/`, commit, push, and re-run `setup.sh`.
+Configs in this repo are the source of truth. Don't edit live files (`~/.zshrc`, `~/.bashrc`, `~/.cshrc`, etc.) directly — edit the source in `configs/`, commit, push, and re-run `setup.sh`. Settings for one machine only (work paths, private variables) go in `~/.zshrc.local`, which `~/.zshrc` loads last and `setup.sh` never touches.
 
 ## Structure
 
