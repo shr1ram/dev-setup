@@ -42,7 +42,8 @@
       "Bash(rm -rf *)",
       "Read(./.env)",
       "Read(./secrets/**)"
-    ]
+    ],
+    "defaultMode": "auto"
   },
   "statusLine": {
     "type": "command",
