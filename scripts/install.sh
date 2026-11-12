@@ -40,6 +40,7 @@ SKIP_BREW=false
 SKIP_SHELL=false
 SKIP_GIT=false
 SKIP_PRIVATE=false
+SKIP_PRIVATE_FLAG=false   # --skip-private given explicitly; --only must not undo it
 ORBITAL=false
 PERSONAL=false
 DRY_RUN=false
@@ -75,7 +76,7 @@ while [[ $# -gt 0 ]]; do
         --skip-brew)      SKIP_BREW=true ;;
         --skip-shell)     SKIP_SHELL=true ;;
         --skip-git)       SKIP_GIT=true ;;
-        --skip-private)   SKIP_PRIVATE=true ;;
+        --skip-private)   SKIP_PRIVATE=true; SKIP_PRIVATE_FLAG=true ;;
         --orbital)        ORBITAL=true ;;
         --personal)       PERSONAL=true ;;
         --only)
@@ -108,6 +109,7 @@ if [[ -n "$ONLY_MODULE" ]]; then
         personal)  PERSONAL=true; SKIP_PRIVATE=false ;;  # workstation profile, via the private repo
         *) error "Unknown module: $ONLY_MODULE"; exit 1 ;;
     esac
+    [[ "$SKIP_PRIVATE_FLAG" == true ]] && SKIP_PRIVATE=true
 fi
 
 backup_file() {

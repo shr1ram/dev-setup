@@ -60,10 +60,10 @@ Everything in minimal, plus:
 - Installs Tailscale
 
 ### Orbital (`--orbital`, opt-in)
-Adds the work tooling from the private repo's `orbital/` folder. On macOS it symlinks `~/.local/bin/gpu-login`, the GPU-session login helper. Nothing else is installed; see the private repo's `orbital/README.md` for usage and one-time setup. Combine it with any other flags, e.g. `--full --orbital` or `--orbital --skip-ssh`.
+Adds the work tooling from the private repo's `orbital/` folder. On macOS it symlinks `~/.local/bin/gpu-login`, the GPU-session login helper, and it sets up the workstation's orbital profile (below). See the private repo's `orbital/README.md` for usage and one-time setup. Combine it with any other flags, e.g. `--full --orbital` or `--orbital --skip-ssh`.
 
 ### Workstation (`--orbital` / `--personal`, opt-in)
-Either flag also clones my private workstation repo (project rules, plans and decisions) to `~/workstation` and sets up the profile of the same name. `--personal` does nothing else. Without either flag the workstation is left alone. Details are in the private repo.
+Either flag also clones my private workstation repo (project rules, plans and decisions) to `~/workstation` and sets up the profile of the same name. `--personal` does nothing else. Without either flag the workstation is left alone. Both flags are ignored with `--skip-private`. Details are in the private repo.
 
 Existing files are backed up before overwriting (max 3 kept per file). Running again is safe — identical configs are skipped, and it only installs what's missing.
 
@@ -77,8 +77,8 @@ Existing files are backed up before overwriting (max 3 kept per file). Running a
 | `gh`       | GitHub CLI (standalone binary)                  | public  | minimal |
 | `claude`   | Claude Code install + settings, hooks, permissions, skills | public  | minimal |
 | `ssh`      | SSH config (hosts, keys)                        | private | minimal |
-| `orbital`  | Orbital work tooling (`gpu-login` on PATH, macOS) | private | opt-in (`--orbital`) |
-| `workstation` | `~/workstation` clone + the matching profile | private | opt-in (`--orbital` / `--personal`) |
+| `orbital`  | Orbital work tooling (`gpu-login` on PATH, macOS) + the workstation's orbital profile | private | opt-in (`--orbital`) |
+| `personal` | The workstation's personal profile (`~/workstation` clone) | private | opt-in (`--personal`) |
 | `brew`     | Installs Homebrew + packages from Brewfile      | public  | full    |
 | `shell`    | + pyenv install                                 | public  | full    |
 | `tailscale`| Tailscale VPN                                   | public  | full    |
